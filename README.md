@@ -27,7 +27,7 @@ docker compose exec ollama ollama pull qwen2.5:7b
 docker compose exec ollama ollama pull nomic-embed-text
 ```
 
-Open `http://localhost:8000`. The API reference is at `http://localhost:8000/docs`. Qdrant's local dashboard/API is available at `http://localhost:6333`.
+Open `http://localhost:8001`. The API reference is at `http://localhost:8001/docs`. Qdrant's local dashboard/API is available at `http://localhost:6333`. These published ports are bound to loopback and are not exposed on external interfaces.
 
 Put source documentation under `knowledge/`, with runbooks under `knowledge/runbooks/`, then use **POST /api/ingest/local** to index it. Individual files can also be uploaded through **POST /api/ingest** with `kind=document` or `kind=runbook`. Ollama must be running with both configured models available before chat, ingestion, or runbook generation can use embeddings/model inference. `RELEVANCE_THRESHOLD` (default `0.35`) controls the minimum Qdrant cosine score returned as evidence.
 
@@ -39,10 +39,10 @@ Python 3.12 or newer is required.
 python -m venv .venv
 . .venv/bin/activate
 pip install -e '.[dev]'
-uvicorn rosie.main:app --reload
+uvicorn rosie.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-Set `OLLAMA_BASE_URL` and `QDRANT_URL` for services running outside Compose. The settings in `rosie/config.py` are environment configurable.
+For local development, ROSIE defaults to Ollama at `http://localhost:11434` and Qdrant at `http://localhost:6333`. Inside Compose, the app uses the `ollama` and `qdrant` service names on the private Compose network. The settings in `rosie/config.py` are environment configurable.
 
 ## API
 

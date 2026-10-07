@@ -26,10 +26,10 @@ class Settings(BaseSettings):
     restricted_systems: str = "All infrastructure systems; none are connected in v0.1."
     sensitive_data_policy: str = "Do not request or store secrets; ask users to redact sensitive operational data."
     escalation_configuration: str = "Not configured; advise the user to contact their responsible operator or service owner."
-    ollama_base_url: str = "http://ollama:11434"
+    ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
     ollama_embedding_model: str = "nomic-embed-text"
-    qdrant_url: str = "http://qdrant:6333"
+    qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "rosie_documents"
     relevance_threshold: float = 0.35
     docs_path: str = "./knowledge"
