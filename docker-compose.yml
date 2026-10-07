@@ -8,6 +8,11 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
       OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
       RELEVANCE_THRESHOLD: ${RELEVANCE_THRESHOLD:-0.35}
+      DOCUMENTATION_SOURCE_URL: ${DOCUMENTATION_SOURCE_URL:-https://homelab.refol.us/}
+      RUNBOOK_SOURCE_URL: ${RUNBOOK_SOURCE_URL:-https://homelab.refol.us/runbooks.html}
+      WEB_SOURCE_MAX_PAGES: ${WEB_SOURCE_MAX_PAGES:-100}
+      WEB_SOURCE_TIMEOUT_SECONDS: ${WEB_SOURCE_TIMEOUT_SECONDS:-15}
+      WEB_SOURCE_MAX_PAGE_BYTES: ${WEB_SOURCE_MAX_PAGE_BYTES:-2000000}
       QDRANT_URL: http://qdrant:6333
       DOCS_PATH: /app/knowledge
       REPOSITORY_PATH: /app/docs/rosie/generated-runbooks

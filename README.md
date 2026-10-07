@@ -29,7 +29,7 @@ docker compose exec ollama ollama pull nomic-embed-text
 
 Open `http://localhost:8001` on the host, or `http://<host-ip>:8001` from another device on the LAN (for example, `http://192.168.20.101:8001`). The API reference is at `/docs`. ROSIE's web/API port is published on host network interfaces; Qdrant and Ollama remain bound to loopback. Allow TCP port 8001 through the host firewall only on trusted networks.
 
-Put source documentation under `knowledge/`, with runbooks under `knowledge/runbooks/`, then use **POST /api/ingest/local** to index it. Individual files can also be uploaded through **POST /api/ingest** with `kind=document` or `kind=runbook`. Ollama must be running with both configured models available before chat, ingestion, or runbook generation can use embeddings/model inference. `RELEVANCE_THRESHOLD` (default `0.35`) controls the minimum Qdrant cosine score returned as evidence.
+Put source documentation under `knowledge/`, with runbooks under `knowledge/runbooks/`, then use **POST /api/ingest/local** to index it. Use **POST /api/ingest/sources** to fetch the configured Home Lab Platform Overview and Runbooks index plus linked same-origin HTML pages. Source URLs, crawl limits, and timeouts are environment configurable. The crawl is operator-triggered, restricted to HTTPS pages on each configured source's origin, and capped at 100 pages per source and 2 MB per page by default. Individual files can also be uploaded through **POST /api/ingest** with `kind=document` or `kind=runbook`. Ollama must be running with both configured models available before chat, ingestion, or runbook generation can use embeddings/model inference. `RELEVANCE_THRESHOLD` (default `0.35`) controls the minimum Qdrant cosine score returned as evidence.
 
 ## Local Development
 
@@ -47,6 +47,7 @@ For local development, ROSIE defaults to Ollama at `http://localhost:11434` and 
 ## API
 
 - `POST /api/ingest` and `POST /api/ingest/local`: index documents
+- `POST /api/ingest/sources`: fetch and index configured documentation and runbook pages
 - `GET /api/search?q=...&kind=document|runbook`: retrieve evidence
 - `POST /api/chat`: investigate a question using indexed documentation
 - `GET /api/runbooks/gap?q=...`: check for a matching runbook

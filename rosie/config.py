@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     organization_name: str = "Not configured"
     environment_name: str = "Local ROSIE instance"
     environment_type: str = "Documentation-only MVP"
-    documentation_sources: str = "Indexed local documents and uploads only; automatic web crawling is not configured."
-    runbook_sources: str = "Indexed local runbook passages only."
+    documentation_sources: str = "https://homelab.refol.us/ plus local documents and uploads; refresh through an explicit bounded same-origin HTTPS source sync."
+    runbook_sources: str = "https://homelab.refol.us/runbooks.html plus local runbooks and uploads; refresh through an explicit bounded same-origin HTTPS source sync."
     incident_sources: str = "Not configured"
     architecture_sources: str = "Indexed local architecture documents, when available."
     infrastructure_connectors: str = "None; infrastructure access is out of scope for v0.1."
@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     restricted_systems: str = "All infrastructure systems; none are connected in v0.1."
     sensitive_data_policy: str = "Do not request or store secrets; ask users to redact sensitive operational data."
     escalation_configuration: str = "Not configured; advise the user to contact their responsible operator or service owner."
+    documentation_source_url: str = "https://homelab.refol.us/"
+    runbook_source_url: str = "https://homelab.refol.us/runbooks.html"
+    web_source_max_pages: int = 100
+    web_source_timeout_seconds: float = 15
+    web_source_max_page_bytes: int = 2_000_000
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
     ollama_embedding_model: str = "nomic-embed-text"

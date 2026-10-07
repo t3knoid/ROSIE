@@ -11,6 +11,7 @@ from rosie.knowledge import KnowledgeBase
 from rosie.models import ChatRequest, ChatResponse, Evidence, PublishRequest, Runbook, RunbookDraftRequest
 from rosie.publisher import GitRepositoryPublisher
 from rosie.runbooks import to_markdown
+from rosie.web_sources import crawl_html_source
 from rosie.workflow import build_investigation_graph, draft_runbook
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
@@ -81,6 +82,48 @@ def ingest_local_documents() -> dict[str, int]:
         total += get_knowledge_base().ingest(text, str(path.relative_to(root)), kind)
     audit.record("local_documents_ingested", {"directory": str(root), "files": len(documents), "chunks": total})
     return {"files": len(documents), "chunks": total}
+
+
+@app.post("/api/ingest/sources")
+def ingest_configured_sources() -> dict[str, object]:
+    sources = [
+        (settings.documentation_source_url, "document"),
+        (settings.runbook_source_url, "runbook"),
+    ]
+    page_count = 0
+    chunk_count = 0
+    pages_by_kind = {"document": 0, "runbook": 0}
+    errors: list[str] = []
+    knowledge = get_knowledge_base()
+
+    for source_url, kind in sources:
+        try:
+            result = crawl_html_source(
+                source_url,
+                max_pages=settings.web_source_max_pages,
+                timeout_seconds=settings.web_source_timeout_seconds,
+                max_page_bytes=settings.web_source_max_page_bytes,
+            )
+        except ValueError as error:
+            errors.append(f"{source_url}: {error}")
+            continue
+        errors.extend(result.errors)
+        for page in result.pages:
+            text = f"{page.title}\nSource: {page.url}\n\n{page.text}"
+            chunk_count += knowledge.ingest(text, page.url, kind)
+            page_count += 1
+            pages_by_kind[kind] += 1
+
+    if not page_count:
+        raise HTTPException(
+            status_code=502,
+            detail={"message": "No configured documentation pages could be fetched.", "errors": errors},
+        )
+    audit.record(
+        "web_sources_ingested",
+        {"pages": page_count, "chunks": chunk_count, "pages_by_kind": pages_by_kind, "errors": errors},
+    )
+    return {"pages": page_count, "chunks": chunk_count, "pages_by_kind": pages_by_kind, "errors": errors}
 
 
 @app.get("/api/search")

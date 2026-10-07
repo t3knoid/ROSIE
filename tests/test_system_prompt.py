@@ -27,6 +27,8 @@ def test_prompt_template_resolves_deployment_values() -> None:
     assert prompt.startswith("You are ROSIE.")
     assert "{{" not in prompt
     assert "no infrastructure integrations or actions in v0.1" in prompt
+    assert "https://homelab.refol.us/" in prompt
+    assert "https://homelab.refol.us/runbooks.html" in prompt
     assert "Observe. Simulate. Examine. Resolve." in prompt
 
 
