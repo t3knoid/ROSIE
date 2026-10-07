@@ -10,9 +10,9 @@
 
 Install the project and test extras with `pip install -e '.[dev]'`. Run the API with `uvicorn rosie.main:app --reload` after setting service URLs in the environment. Run tests with `pytest`.
 
-For Compose, start the services with `docker compose up --build`, pull the chat and embedding models with `docker compose exec ollama ollama pull qwen2.5:7b` and `docker compose exec ollama ollama pull nomic-embed-text`, then use `http://localhost:8001`. ROSIE, Qdrant, and Ollama ports are published only on host loopback. Store source material under `knowledge/`; use `knowledge/runbooks/` for runbooks.
+For Compose, start the services with `docker compose up --build`, pull the chat and embedding models with `docker compose exec ollama ollama pull qwen2.5:7b` and `docker compose exec ollama ollama pull nomic-embed-text`, then use `http://localhost:8001` or `http://<host-ip>:8001` from another LAN device. ROSIE is published on host network interfaces; Qdrant and Ollama remain loopback-only. Restrict TCP port 8001 in the host firewall to trusted networks. Store source material under `knowledge/`; use `knowledge/runbooks/` for runbooks.
 
-For local development outside Compose, ROSIE uses `http://localhost:11434` for Ollama and `http://localhost:6333` for Qdrant by default. Start ROSIE with `uvicorn rosie.main:app --reload --host 127.0.0.1 --port 8001`.
+For local development outside Compose, ROSIE uses `http://localhost:11434` for Ollama and `http://localhost:6333` for Qdrant by default. To make the page available on the LAN, start ROSIE with `uvicorn rosie.main:app --reload --host 0.0.0.0 --port 8001`. Restrict access with the host firewall.
 
 ## Change Guidelines
 
