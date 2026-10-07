@@ -1,0 +1,43 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      RELEVANCE_THRESHOLD: ${RELEVANCE_THRESHOLD:-0.35}
+      QDRANT_URL: http://qdrant:6333
+      DOCS_PATH: /app/knowledge
+      REPOSITORY_PATH: /app/docs/rosie/generated-runbooks
+      AUDIT_LOG_PATH: /app/data/audit.jsonl
+    volumes:
+      - ./knowledge:/app/knowledge:ro
+      - ./docs/rosie:/app/docs/rosie
+      - rosie-audit:/app/data
+    depends_on:
+      - qdrant
+      - ollama
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  qdrant-data:
+  ollama-data:
+  rosie-audit:

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ROSIE | Operations Desk</title>
+  <style>
+    :root { color-scheme: light; --ink: #182421; --muted: #60706a; --paper: #f3f2eb; --panel: #fffefa; --line: #d6dbd2; --green: #176b54; --lime: #d5ed7b; --coral: #c4543c; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 Georgia, 'Times New Roman', serif; }
+    header { height: 64px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 max(24px, calc((100vw - 1100px)/2)); background: var(--panel); }
+    .brand { font: 700 19px/1.1 'Trebuchet MS', sans-serif; letter-spacing: 0; }
+    .brand span { color: var(--green); }
+    .status { display: flex; gap: 8px; align-items: center; font: 13px 'Trebuchet MS', sans-serif; color: var(--muted); }
+    .dot { width: 8px; aspect-ratio: 1; border-radius: 50%; background: #71a83f; }
+    main { max-width: 1100px; margin: 0 auto; padding: 56px 24px 48px; display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 56px; }
+    .eyebrow { color: var(--green); font: 700 12px 'Trebuchet MS', sans-serif; text-transform: uppercase; letter-spacing: 0; }
+    h1 { margin: 10px 0 8px; font: 400 38px/1.1 Georgia, serif; }
+    .intro { color: var(--muted); margin: 0 0 30px; }
+    #thread { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+    .message { padding: 16px 18px; border-left: 3px solid var(--green); background: var(--panel); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .message.user { border-color: var(--coral); }
+    .message small { display: block; margin-bottom: 6px; font: 700 11px 'Trebuchet MS', sans-serif; color: var(--muted); text-transform: uppercase; }
+    form { display: flex; align-items: stretch; border: 1px solid #b8c2b9; background: var(--panel); }
+    textarea { min-height: 92px; flex: 1; border: 0; resize: vertical; padding: 14px; font: 16px Georgia, serif; color: var(--ink); background: transparent; }
+    button { border: 0; background: var(--green); color: white; padding: 0 20px; font: 700 14px 'Trebuchet MS', sans-serif; cursor: pointer; }
+    button:hover { background: #10503f; }
+    button:disabled { opacity: .55; cursor: wait; }
+    aside { border-top: 4px solid var(--lime); padding-top: 16px; }
+    aside h2 { margin: 0 0 8px; font: 700 14px 'Trebuchet MS', sans-serif; }
+    aside p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+    #sources { padding-left: 18px; color: var(--muted); font: 13px/1.6 'Trebuchet MS', sans-serif; overflow-wrap: anywhere; }
+    .notice { color: var(--coral); font: 13px 'Trebuchet MS', sans-serif; }
+    @media (max-width: 700px) { main { grid-template-columns: 1fr; gap: 32px; padding-top: 34px; } h1 { font-size: 32px; } form { flex-direction: column; } button { min-height: 48px; } header { padding: 0 20px; } }
+  </style>
+</head>
+<body>
+  <header><div class="brand">ROSIE <span>/ Operations Desk</span></div><div class="status"><i class="dot"></i> Documentation mode</div></header>
+  <main>
+    <section>
+      <div class="eyebrow">Root-cause Observation, Simulation &amp; Incident Examiner</div>
+      <h1>What needs investigating?</h1>
+      <p class="intro">Ask about an incident. ROSIE will check your indexed documentation and show its sources.</p>
+      <div id="thread" aria-live="polite"></div>
+      <form id="question-form"><textarea id="question" placeholder="Describe the symptom or error..." required maxlength="4000" aria-label="Incident question"></textarea><button id="ask" type="submit">Investigate</button></form>
+      <p id="error" class="notice" role="alert"></p>
+    </section>
+    <aside><h2>Evidence consulted</h2><p>Local runbooks and architecture documentation take priority over general guidance.</p><ul id="sources"><li>Sources appear here after an investigation.</li></ul></aside>
+  </main>
+  <script>
+    const form = document.querySelector('#question-form');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = document.querySelector('#question');
+      const button = document.querySelector('#ask');
+      const error = document.querySelector('#error');
+      const thread = document.querySelector('#thread');
+      const sources = document.querySelector('#sources');
+      const question = input.value.trim();
+      if (!question) return;
+      const userMessage = document.createElement('div');
+      userMessage.className = 'message user';
+      userMessage.innerHTML = '<small>You</small>';
+      userMessage.append(document.createTextNode(question));
+      thread.append(userMessage);
+      input.value = '';
+      button.disabled = true;
+      error.textContent = '';
+      try {
+        const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) });
+        if (!response.ok) throw new Error((await response.json()).detail || 'Investigation failed');
+        const result = await response.json();
+        const answer = document.createElement('div');
+        answer.className = 'message';
+        answer.innerHTML = '<small>ROSIE</small>';
+        answer.append(document.createTextNode(result.answer));
+        thread.append(answer);
+        sources.replaceChildren();
+        if (result.evidence.length) result.evidence.forEach(item => { const li = document.createElement('li'); li.textContent = `${item.source} · ${item.kind}`; sources.append(li); });
+        else sources.innerHTML = '<li>No matching local documents found.</li>';
+        thread.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      } catch (err) { error.textContent = err.message; }
+      finally { button.disabled = false; input.focus(); }
+    });
+  </script>
+</body>
+</html>
