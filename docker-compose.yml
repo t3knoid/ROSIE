@@ -1,5 +1,6 @@
 services:
   app:
+    container_name: rosie-app
     build: .
     ports:
       - "8001:8000"
@@ -27,6 +28,7 @@ services:
     restart: unless-stopped
 
   qdrant:
+    container_name: qdrant
     image: qdrant/qdrant:v1.12.1
     ports:
       - "127.0.0.1:6333:6333"
@@ -35,6 +37,7 @@ services:
     restart: unless-stopped
 
   ollama:
+    container_name: ollama
     image: ollama/ollama:latest
     ports:
       - "127.0.0.1:11434:11434"
