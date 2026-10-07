@@ -1,6 +1,6 @@
 # ROSIE
 
-ROSIE (Root-cause Observation, Simulation & Incident Examiner) is a documentation-aware operations assistant. Version 0.1 is deliberately documentation-only: it indexes local operational knowledge, retrieves evidence, guides investigations, identifies runbook gaps, and drafts structured runbooks for review. It does not connect to or change infrastructure.
+ROSIE (Root-cause Observation, SRE Incident Examiner) is a documentation-aware operations assistant. Version 0.1 is deliberately documentation-only: it indexes local operational knowledge, retrieves evidence, guides investigations, identifies runbook gaps, and drafts structured runbooks for review. It does not connect to or change infrastructure.
 
 ## MVP
 
@@ -17,14 +17,14 @@ Requires Docker Compose and enough memory and disk for the selected Ollama model
 
 ```sh
 cp .env.example .env
-docker compose up --build
+sudo docker compose up --build
 ```
 
-In another terminal, download the configured Qwen model:
+In another terminal, download the confirmed Qwen model:
 
 ```sh
-docker compose exec ollama ollama pull qwen2.5:7b
-docker compose exec ollama ollama pull nomic-embed-text
+sudo docker compose exec ollama ollama pull qwen2.5:7b
+sudo docker compose exec ollama ollama pull nomic-embed-text
 ```
 
 Open `http://localhost:8001` on the host, or `http://<host-ip>:8001` from another device on the LAN (for example, `http://192.168.20.101:8001`). The API reference is at `/docs`. ROSIE's web/API port is published on host network interfaces; Qdrant and Ollama remain bound to loopback. Allow TCP port 8001 through the host firewall only on trusted networks.
