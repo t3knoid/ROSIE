@@ -4,25 +4,34 @@ from rosie.knowledge import KnowledgeBase, OllamaEmbeddingClient
 
 
 class FakeEmbeddings:
+    def __init__(self) -> None:
+        self.calls = 0
+
     def embed_documents(self, passages: list[str]) -> list[list[float]]:
+        self.calls += 1
         return [[float(index), 1.0] for index, _ in enumerate(passages)]
 
 
 class FakeQdrant:
     def __init__(self) -> None:
-        self.ids = {"stale-point"}
+        self.points = {"stale-point": {"text": "stale content"}}
+
+    @property
+    def ids(self) -> set[str]:
+        return set(self.points)
 
     def collection_exists(self, collection: str) -> bool:
         return True
 
     def scroll(self, **kwargs):
-        return [SimpleNamespace(id=point_id) for point_id in self.ids], None
+        return [SimpleNamespace(id=point_id, payload=payload) for point_id, payload in self.points.items()], None
 
     def upsert(self, collection_name: str, points: list) -> None:
-        self.ids.update(point.id for point in points)
+        self.points.update((point.id, point.payload) for point in points)
 
     def delete(self, collection_name: str, points_selector) -> None:
-        self.ids.difference_update(points_selector.points)
+        for point_id in points_selector.points:
+            self.points.pop(point_id, None)
 
 
 def test_ollama_embedding_client_does_not_send_generation_options(monkeypatch) -> None:
@@ -50,7 +59,8 @@ def test_ollama_embedding_client_does_not_send_generation_options(monkeypatch) -
 def test_ingest_replaces_existing_source_chunks_without_duplicates() -> None:
     knowledge = KnowledgeBase.__new__(KnowledgeBase)
     knowledge.client = FakeQdrant()
-    knowledge.embeddings = FakeEmbeddings()
+    embeddings = FakeEmbeddings()
+    knowledge.embeddings = embeddings
     knowledge.collection = "test"
 
     first_count = knowledge.ingest("alpha bravo charlie delta", "https://example.test/page.html", "runbook")
@@ -58,5 +68,12 @@ def test_ingest_replaces_existing_source_chunks_without_duplicates() -> None:
     second_count = knowledge.ingest("alpha bravo charlie delta", "https://example.test/page.html", "runbook")
 
     assert first_count == second_count
+    assert embeddings.calls == 1
     assert len(knowledge.client.ids) == first_count
     assert knowledge.client.ids == first_ids
+
+    knowledge.ingest("alpha bravo charlie echo", "https://example.test/page.html", "runbook")
+
+    assert embeddings.calls == 2
+    assert knowledge.client.ids == first_ids
+    assert any("echo" in point["text"] for point in knowledge.client.points.values())

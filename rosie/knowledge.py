@@ -33,20 +33,18 @@ class KnowledgeBase:
         passages = chunks(text)
         if not passages:
             return 0
-        vectors = self.embeddings.embed_documents(passages)
+        point_ids = [
+            str(uuid5(NAMESPACE_URL, f"rosie:{kind}:{source}:{index}"))
+            for index in range(len(passages))
+        ]
         collection_exists = self.client.collection_exists(self.collection)
-        if not collection_exists:
-            self.client.create_collection(
-                collection_name=self.collection,
-                vectors_config=models.VectorParams(size=len(vectors[0]), distance=models.Distance.COSINE),
-            )
         source_filter = models.Filter(
             must=[
                 models.FieldCondition(key="source", match=models.MatchValue(value=source)),
                 models.FieldCondition(key="kind", match=models.MatchValue(value=kind)),
             ]
         )
-        existing_ids: set[str] = set()
+        existing_passages: dict[str, str] = {}
         if collection_exists:
             offset = None
             while True:
@@ -55,15 +53,27 @@ class KnowledgeBase:
                     scroll_filter=source_filter,
                     limit=256,
                     offset=offset,
-                    with_payload=False,
+                    with_payload=["text"],
                 )
-                existing_ids.update(str(point.id) for point in points)
+                existing_passages.update(
+                    (str(point.id), str((point.payload or {}).get("text", "")))
+                    for point in points
+                )
                 if offset is None:
                     break
-        point_ids = [
-            str(uuid5(NAMESPACE_URL, f"rosie:{kind}:{source}:{index}"))
-            for index in range(len(passages))
-        ]
+
+        if len(existing_passages) == len(point_ids) and all(
+            existing_passages.get(point_id) == passage
+            for point_id, passage in zip(point_ids, passages, strict=True)
+        ):
+            return len(passages)
+
+        vectors = self.embeddings.embed_documents(passages)
+        if not collection_exists:
+            self.client.create_collection(
+                collection_name=self.collection,
+                vectors_config=models.VectorParams(size=len(vectors[0]), distance=models.Distance.COSINE),
+            )
         self.client.upsert(
             collection_name=self.collection,
             points=[
@@ -75,7 +85,7 @@ class KnowledgeBase:
                 for point_id, passage, vector in zip(point_ids, passages, vectors, strict=True)
             ],
         )
-        stale_ids = existing_ids.difference(point_ids)
+        stale_ids = set(existing_passages).difference(point_ids)
         if stale_ids:
             self.client.delete(
                 collection_name=self.collection,
