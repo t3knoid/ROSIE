@@ -1,6 +1,6 @@
 # ROSIE
 
-## Root-cause Observation, Simulation & Incident Examiner
+## Root-cause Observation, SRE Incident Examiner
 
 ### Overview
 
@@ -8,7 +8,7 @@ ROSIE is a documentation-aware DevOps and Site Reliability Engineering (SRE) ass
 
 Unlike a generic chatbot, ROSIE prioritizes operational evidence, runbooks, architecture documentation, and environmental context. It treats documentation as an operational asset and helps reduce tribal knowledge by finding documentation gaps and generating structured drafts for review.
 
-In v0.1, ROSIE works from documents indexed locally, uploaded by an operator, or fetched by an explicit source-sync request. It has no live infrastructure or observability connectors and does not run a background web crawl.
+In v0.1, ROSIE works from documents indexed locally, uploaded by an operator, or fetched by an explicit source-sync request. Operators can start a sync from the chat page with **Sync sources** or call `POST /api/ingest/sources`; the page remembers the last successful sync time in that browser. It has no live infrastructure or observability connectors and does not run a background web crawl.
 
 ---
 
@@ -98,7 +98,7 @@ The API accepts uploaded files or indexes files placed under the local `knowledg
 - [Homelab Documentation](https://homelab.refol.us)
 - [Homelab Runbooks](https://homelab.refol.us/runbooks.html)
 
-These are the configured authoritative references for the initial homelab deployment. `POST /api/ingest/sources` fetches these pages and bounded same-origin HTML links on request; it does not crawl in the background. Content can also be placed in the local knowledge directory or uploaded.
+These are the configured authoritative references for the initial homelab deployment. The chat page's **Sync sources** control, or `POST /api/ingest/sources`, fetches these pages and bounded same-origin HTML links on request; it does not crawl in the background. The displayed last-sync time is browser-local. Content can also be placed in the local knowledge directory or uploaded.
 
 ---
 

@@ -40,6 +40,16 @@ def test_health_and_chat_are_documentation_aware(monkeypatch) -> None:
     assert response.json()["runbook_gap"] is True
 
 
+def test_home_page_exposes_source_sync_and_last_sync_status() -> None:
+    response = TestClient(main.app).get("/")
+
+    assert response.status_code == 200
+    assert 'id="sync-sources"' in response.text
+    assert 'id="sync-status"' in response.text
+    assert "'/api/ingest/sources'" in response.text
+    assert "rosie-last-successful-source-sync" in response.text
+
+
 def test_ingest_validates_file_and_records_extracted_text(monkeypatch) -> None:
     knowledge = FakeKnowledgeBase()
     monkeypatch.setattr(main, "get_knowledge_base", lambda: knowledge)
