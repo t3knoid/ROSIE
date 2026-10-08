@@ -1,1 +1,1 @@
-"""ROSIE: Root-cause Observation, Simulation & Incident Examiner."""
+"""ROSIE: Root-cause Observation, SRE Incident Examiner."""

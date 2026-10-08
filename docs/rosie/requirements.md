@@ -6,7 +6,7 @@
 
 **ROSIE**
 
-**Root-cause Observation, Simulation & Incident Examiner**
+**Root-cause Observation, SRE Incident Examiner**
 
 ### Vision
 
