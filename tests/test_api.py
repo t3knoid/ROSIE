@@ -44,6 +44,7 @@ def test_home_page_exposes_source_sync_and_last_sync_status() -> None:
     response = TestClient(main.app).get("/")
 
     assert response.status_code == 200
+    assert 'id="ask" type="submit" disabled' in response.text
     assert 'id="sync-sources"' in response.text
     assert 'id="sync-status"' in response.text
     assert "'/api/ingest/sources'" in response.text

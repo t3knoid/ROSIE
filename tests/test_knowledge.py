@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from rosie.knowledge import KnowledgeBase
+from rosie.knowledge import KnowledgeBase, OllamaEmbeddingClient
 
 
 class FakeEmbeddings:
@@ -23,6 +23,28 @@ class FakeQdrant:
 
     def delete(self, collection_name: str, points_selector) -> None:
         self.ids.difference_update(points_selector.points)
+
+
+def test_ollama_embedding_client_does_not_send_generation_options(monkeypatch) -> None:
+    calls: list[tuple[str, list[str]]] = []
+
+    class FakeOllamaClient:
+        def __init__(self, host: str) -> None:
+            assert host == "http://ollama.test:11434"
+
+        def embed(self, *, model: str, input: list[str]) -> dict[str, list[list[float]]]:
+            calls.append((model, input))
+            return {"embeddings": [[0.1, 0.2] for _ in input]}
+
+    monkeypatch.setattr("rosie.knowledge.Client", FakeOllamaClient)
+    embeddings = OllamaEmbeddingClient("nomic-embed-text", "http://ollama.test:11434")
+
+    assert embeddings.embed_documents(["first", "second"]) == [[0.1, 0.2], [0.1, 0.2]]
+    assert embeddings.embed_query("query") == [0.1, 0.2]
+    assert calls == [
+        ("nomic-embed-text", ["first", "second"]),
+        ("nomic-embed-text", ["query"]),
+    ]
 
 
 def test_ingest_replaces_existing_source_chunks_without_duplicates() -> None:

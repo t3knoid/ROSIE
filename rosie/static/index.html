@@ -44,7 +44,7 @@
       <h1>What needs investigating?</h1>
       <p class="intro">Ask about an incident. ROSIE will check your indexed documentation and show its sources.</p>
       <div id="thread" aria-live="polite"></div>
-      <form id="question-form"><textarea id="question" placeholder="Describe the symptom or error..." required maxlength="4000" aria-label="Incident question"></textarea><button id="ask" type="submit">Investigate</button></form>
+      <form id="question-form"><textarea id="question" placeholder="Describe the symptom or error..." required maxlength="4000" aria-label="Incident question"></textarea><button id="ask" type="submit" disabled>Investigate</button></form>
       <p id="error" class="notice" role="alert"></p>
     </section>
     <aside>
@@ -61,11 +61,18 @@
     const form = document.querySelector('#question-form');
     const syncButton = document.querySelector('#sync-sources');
     const syncStatus = document.querySelector('#sync-status');
+    const input = document.querySelector('#question');
+    const askButton = document.querySelector('#ask');
     const lastSyncStorageKey = 'rosie-last-successful-source-sync';
     const previousSync = localStorage.getItem(lastSyncStorageKey);
-    if (previousSync && !Number.isNaN(Date.parse(previousSync))) {
+    let sourcesSynced = Boolean(previousSync && !Number.isNaN(Date.parse(previousSync)));
+    const updateInvestigateState = () => {
+      askButton.disabled = !sourcesSynced || !input.value.trim();
+    };
+    if (sourcesSynced) {
       syncStatus.textContent = `Last successful sync in this browser: ${new Date(previousSync).toLocaleString()}.`;
     }
+    input.addEventListener('input', updateInvestigateState);
 
     syncButton.addEventListener('click', async () => {
       syncButton.disabled = true;
@@ -81,11 +88,13 @@
           throw new Error([message, ...errors].join('\n'));
         }
         localStorage.setItem(lastSyncStorageKey, new Date().toISOString());
+        sourcesSynced = true;
         const pagesByKind = result.pages_by_kind;
         let message = `Last successful sync in this browser: ${new Date().toLocaleString()}. Indexed ${result.page_count} pages (${pagesByKind.document} documents, ${pagesByKind.runbook} runbooks; ${result.chunk_count} chunks).`;
         if (result.errors.length) message += `\n${result.errors.length} pages could not be fetched: ${result.errors.slice(0, 2).join(' ')}`;
         syncStatus.textContent = message;
         if (result.errors.length) syncStatus.className = 'notice';
+        updateInvestigateState();
       } catch (error) {
         syncStatus.textContent = `Source sync failed: ${error.message}`;
         syncStatus.className = 'notice';
@@ -96,8 +105,6 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const input = document.querySelector('#question');
-      const button = document.querySelector('#ask');
       const error = document.querySelector('#error');
       const thread = document.querySelector('#thread');
       const sources = document.querySelector('#sources');
@@ -109,7 +116,7 @@
       userMessage.append(document.createTextNode(question));
       thread.append(userMessage);
       input.value = '';
-      button.disabled = true;
+      updateInvestigateState();
       error.textContent = '';
       try {
         const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) });
@@ -125,7 +132,7 @@
         else sources.innerHTML = '<li>No matching local documents found.</li>';
         thread.scrollIntoView({ behavior: 'smooth', block: 'end' });
       } catch (err) { error.textContent = err.message; }
-      finally { button.disabled = false; input.focus(); }
+      finally { updateInvestigateState(); input.focus(); }
     });
   </script>
 </body>

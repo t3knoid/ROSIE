@@ -1,16 +1,29 @@
 from uuid import NAMESPACE_URL, uuid5
 
-from langchain_ollama import OllamaEmbeddings
+from ollama import Client
 from qdrant_client import QdrantClient, models
 
 from rosie.config import settings
 from rosie.documents import chunks
 
 
+class OllamaEmbeddingClient:
+    def __init__(self, model: str, base_url: str) -> None:
+        self.model = model
+        self.client = Client(host=base_url)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        response = self.client.embed(model=self.model, input=texts)
+        return response["embeddings"]
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.embed_documents([text])[0]
+
+
 class KnowledgeBase:
     def __init__(self) -> None:
         self.client = QdrantClient(url=settings.qdrant_url)
-        self.embeddings = OllamaEmbeddings(
+        self.embeddings = OllamaEmbeddingClient(
             model=settings.ollama_embedding_model,
             base_url=settings.ollama_base_url,
         )
