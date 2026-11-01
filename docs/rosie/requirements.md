@@ -194,12 +194,12 @@ Purpose:
 
 Initially:
 
-Ollama
+llama.cpp, using its OpenAI-compatible server API
 
 Supported models:
 
-- Qwen
 - Llama
+- Qwen
 - DeepSeek
 
 Future:
@@ -624,9 +624,9 @@ The first working version should only do these things:
 
 ✅ Chat interface
 
-✅ Ollama integration
+✅ llama.cpp integration
 
-✅ Qwen model support
+✅ Local GGUF model support
 
 ✅ Documentation ingestion
 
@@ -670,4 +670,4 @@ ROSIE is considered successful when it can:
 6. Help a junior engineer complete operational tasks.
 7. Improve documentation after every incident.
 
-**Short-term recommendation:** build the MVP as a FastAPI + LangGraph + Ollama + Qdrant application running in Docker Compose. If you complete that foundation first, every future capability (Proxmox, Kubernetes, Grafana, Confluence, etc.) becomes a plugin instead of a rewrite.
+**Short-term recommendation:** build the MVP as a FastAPI + LangGraph + llama.cpp + Qdrant application running in Docker Compose. If you complete that foundation first, every future capability (Proxmox, Kubernetes, Grafana, Confluence, etc.) becomes a plugin instead of a rewrite.

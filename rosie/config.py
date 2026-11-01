@@ -31,9 +31,12 @@ class Settings(BaseSettings):
     web_source_max_pages: int = 100
     web_source_timeout_seconds: float = 15
     web_source_max_page_bytes: int = 2_000_000
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:7b"
-    ollama_embedding_model: str = "nomic-embed-text"
+    chat_evidence_limit: int = 4
+    chat_max_output_tokens: int = 512
+    llama_chat_base_url: str = "http://localhost:8080/v1"
+    llama_embedding_base_url: str = "http://localhost:8081/v1"
+    llama_chat_model: str = "local-chat"
+    llama_embedding_model: str = "local-embedding"
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "rosie_documents"
     relevance_threshold: float = 0.35

@@ -153,8 +153,8 @@ Incident
 
 - **Language:** Python 3.12+
 - **Agent workflow:** LangGraph
-- **LLM runtime:** Ollama; Qwen is the default chat model
-- **Embeddings:** Ollama embedding model, configured separately from chat
+- **LLM runtime:** llama.cpp chat server; Llama GGUF is the default chat model
+- **Embeddings:** Separate llama.cpp embedding server and GGUF model
 - **API:** FastAPI
 - **Vector database:** Qdrant
 - **Deployment:** Docker Compose
@@ -166,7 +166,7 @@ Incident
 
 ## v0.1: Documentation MVP
 
-- Chat interface and Ollama integration
+- Chat interface and llama.cpp integration
 - Local document ingestion and Qdrant storage
 - Documentation and runbook retrieval
 - Evidence-aware investigation and basic runbook-gap identification
@@ -227,7 +227,8 @@ These are target outcomes; they do not imply that live infrastructure observatio
 - [Roadmap](roadmap.md) separates the documentation MVP from future integrations.
 - [Changelog](changelog.md) tracks user-visible changes.
 - [Lessons learned](lessons-learned.md) captures operational findings.
-- [Model configurations](model-configurations.md) covers Ollama and Qwen.
+- [Model configurations](model-configurations.md) covers llama.cpp endpoints and GGUF model configuration.
+- [GPU acceleration](gpu-acceleration.md) explains NVIDIA GPU setup and operation with llama.cpp and ROSIE, using the Tesla P4 as the example.
 - [Integrations](integrations.md) describes current service adapters.
 - [Runbook authoring standard](runbook-authoring-standard.md) defines canonical runbook content.
 - [Developer guide](developer-guide.md) describes local setup and checks.

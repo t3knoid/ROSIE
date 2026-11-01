@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from time import perf_counter
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
@@ -10,6 +11,7 @@ from rosie.documents import SUPPORTED_SUFFIXES, load_document
 from rosie.knowledge import KnowledgeBase
 from rosie.models import ChatRequest, ChatResponse, Evidence, PublishRequest, Runbook, RunbookDraftRequest
 from rosie.publisher import GitRepositoryPublisher
+from rosie.rendering import markdown_to_safe_html
 from rosie.runbooks import to_markdown
 from rosie.web_sources import crawl_html_source
 from rosie.workflow import build_investigation_graph, draft_runbook
@@ -139,10 +141,11 @@ def search_documents(q: str, kind: str | None = None, limit: int = 5) -> list[Ev
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
+    started_at = perf_counter()
     try:
         result = get_investigation_graph().invoke({"question": request.question})
     except Exception as error:
-        raise HTTPException(status_code=503, detail=f"ROSIE could not reach its Ollama or Qdrant service: {error}") from error
+        raise HTTPException(status_code=503, detail=f"ROSIE could not reach its llama.cpp or Qdrant service: {error}") from error
     evidence = [
         Evidence(source=str(item["source"]), kind=str(item["kind"]), text=str(item["text"]), score=float(item["score"]))
         for item in result.get("evidence", [])
@@ -151,7 +154,14 @@ def chat(request: ChatRequest) -> ChatResponse:
         "question_investigated",
         {"question": request.question, "evidence": [item.source for item in evidence], "runbook_gap": result.get("runbook_gap", True)},
     )
-    return ChatResponse(answer=result["answer"], evidence=evidence, runbook_gap=result.get("runbook_gap", True))
+    duration_seconds = round(perf_counter() - started_at, 3)
+    return ChatResponse(
+        answer=result["answer"],
+        answer_html=markdown_to_safe_html(result["answer"]),
+        evidence=evidence,
+        runbook_gap=result.get("runbook_gap", True),
+        duration_seconds=duration_seconds,
+    )
 
 
 @app.get("/api/runbooks/gap")
@@ -173,7 +183,7 @@ def create_runbook_draft(request: RunbookDraftRequest) -> Runbook:
     try:
         runbook = draft_runbook(request.incident, evidence)
     except Exception as error:
-        raise HTTPException(status_code=503, detail=f"Could not generate a runbook draft with Ollama: {error}") from error
+        raise HTTPException(status_code=503, detail=f"Could not generate a runbook draft with llama.cpp: {error}") from error
     audit.record("runbook_drafted", {"title": runbook.title, "evidence": [item["source"] for item in evidence]})
     return runbook
 

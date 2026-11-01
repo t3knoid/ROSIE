@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from rosie.knowledge import KnowledgeBase, OllamaEmbeddingClient
+from rosie.knowledge import KnowledgeBase, LlamaCppEmbeddingClient
 
 
 class FakeEmbeddings:
@@ -34,26 +34,25 @@ class FakeQdrant:
             self.points.pop(point_id, None)
 
 
-def test_ollama_embedding_client_does_not_send_generation_options(monkeypatch) -> None:
-    calls: list[tuple[str, list[str]]] = []
+def test_llama_cpp_embedding_client_uses_openai_compatible_api(monkeypatch) -> None:
+    clients: list[tuple[str, str, bool]] = []
 
-    class FakeOllamaClient:
-        def __init__(self, host: str) -> None:
-            assert host == "http://ollama.test:11434"
+    class FakeOpenAIEmbeddings:
+        def __init__(self, *, model: str, base_url: str, api_key: str, check_embedding_ctx_length: bool) -> None:
+            clients.append((model, base_url, check_embedding_ctx_length))
 
-        def embed(self, *, model: str, input: list[str]) -> dict[str, list[list[float]]]:
-            calls.append((model, input))
-            return {"embeddings": [[0.1, 0.2] for _ in input]}
+        def embed_documents(self, texts: list[str]) -> list[list[float]]:
+            return [[0.1, 0.2] for _ in texts]
 
-    monkeypatch.setattr("rosie.knowledge.Client", FakeOllamaClient)
-    embeddings = OllamaEmbeddingClient("nomic-embed-text", "http://ollama.test:11434")
+        def embed_query(self, text: str) -> list[float]:
+            return [0.1, 0.2]
+
+    monkeypatch.setattr("rosie.knowledge.OpenAIEmbeddings", FakeOpenAIEmbeddings)
+    embeddings = LlamaCppEmbeddingClient("local-embedding", "http://llama.test:8081/v1")
 
     assert embeddings.embed_documents(["first", "second"]) == [[0.1, 0.2], [0.1, 0.2]]
     assert embeddings.embed_query("query") == [0.1, 0.2]
-    assert calls == [
-        ("nomic-embed-text", ["first", "second"]),
-        ("nomic-embed-text", ["query"]),
-    ]
+    assert clients == [("local-embedding", "http://llama.test:8081/v1", False)]
 
 
 def test_ingest_replaces_existing_source_chunks_without_duplicates() -> None:

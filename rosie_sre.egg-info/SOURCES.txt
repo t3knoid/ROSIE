@@ -9,6 +9,7 @@ rosie/main.py
 rosie/models.py
 rosie/publisher.py
 rosie/runbooks.py
+rosie/web_sources.py
 rosie/workflow.py
 rosie_sre.egg-info/PKG-INFO
 rosie_sre.egg-info/SOURCES.txt
@@ -17,5 +18,8 @@ rosie_sre.egg-info/requires.txt
 rosie_sre.egg-info/top_level.txt
 tests/test_api.py
 tests/test_documents.py
+tests/test_knowledge.py
 tests/test_publisher.py
 tests/test_runbooks.py
+tests/test_system_prompt.py
+tests/test_web_sources.py

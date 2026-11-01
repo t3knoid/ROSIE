@@ -2,7 +2,7 @@
 
 ## v0.1: Documentation MVP
 
-- Browser chat, FastAPI, LangGraph, Ollama/Qwen, and Qdrant
+- Browser chat, FastAPI, LangGraph, llama.cpp with GGUF models, and Qdrant
 - Local document ingestion and semantic runbook/document search
 - Evidence-aware troubleshooting, runbook gap checks, canonical runbook drafts
 - Markdown export, local Git repository storage, and JSONL audit trail

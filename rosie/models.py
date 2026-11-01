@@ -14,8 +14,10 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    answer_html: str
     evidence: list[Evidence]
     runbook_gap: bool
+    duration_seconds: float
 
 
 class Runbook(BaseModel):

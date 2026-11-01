@@ -2,12 +2,12 @@
 
 ## v0.1 Scope
 
-The browser calls a FastAPI backend. A LangGraph workflow retrieves local evidence from Qdrant and asks the configured Ollama model to explain findings. Ingestion extracts text from supported document formats, creates embeddings with Ollama, and stores passages with source and kind metadata. Runbooks use a typed Pydantic model and are rendered to Markdown only by the exporter.
+The browser calls a FastAPI backend. A LangGraph workflow retrieves local evidence from Qdrant and asks a llama.cpp chat server to explain findings. Ingestion extracts text from supported document formats, creates embeddings through a separate llama.cpp embedding server, and stores passages with source and kind metadata. Both servers expose OpenAI-compatible APIs and load local GGUF models. Runbooks use a typed Pydantic model and are rendered to Markdown only by the exporter.
 
 ```text
-Browser -> FastAPI -> LangGraph -> Ollama
-                     |              |
-                     +-> Qdrant <---+
+Browser -> FastAPI -> LangGraph -> llama.cpp chat
+                     |                     |
+                     +-> Qdrant <--- llama.cpp embeddings
                      +-> audit JSONL
                      +-> checked-out Git repository (draft files only)
 ```

@@ -5,15 +5,18 @@ services:
     ports:
       - "8001:8000"
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
-      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      LLAMA_CHAT_BASE_URL: ${LLAMA_CHAT_BASE_URL:-http://llama-chat:8080/v1}
+      LLAMA_EMBEDDING_BASE_URL: ${LLAMA_EMBEDDING_BASE_URL:-http://llama-embeddings:8081/v1}
+      LLAMA_CHAT_MODEL: ${LLAMA_CHAT_MODEL:-local-chat}
+      LLAMA_EMBEDDING_MODEL: ${LLAMA_EMBEDDING_MODEL:-local-embedding}
       RELEVANCE_THRESHOLD: ${RELEVANCE_THRESHOLD:-0.35}
       DOCUMENTATION_SOURCE_URL: ${DOCUMENTATION_SOURCE_URL:-https://homelab.refol.us/}
       RUNBOOK_SOURCE_URL: ${RUNBOOK_SOURCE_URL:-https://homelab.refol.us/runbooks.html}
       WEB_SOURCE_MAX_PAGES: ${WEB_SOURCE_MAX_PAGES:-100}
       WEB_SOURCE_TIMEOUT_SECONDS: ${WEB_SOURCE_TIMEOUT_SECONDS:-15}
       WEB_SOURCE_MAX_PAGE_BYTES: ${WEB_SOURCE_MAX_PAGE_BYTES:-2000000}
+      CHAT_EVIDENCE_LIMIT: ${CHAT_EVIDENCE_LIMIT:-4}
+      CHAT_MAX_OUTPUT_TOKENS: ${CHAT_MAX_OUTPUT_TOKENS:-512}
       QDRANT_URL: http://qdrant:6333
       DOCS_PATH: /app/knowledge
       REPOSITORY_PATH: /app/docs/rosie/generated-runbooks
@@ -24,7 +27,8 @@ services:
       - rosie-audit:/app/data
     depends_on:
       - qdrant
-      - ollama
+      - llama-chat
+      - llama-embeddings
     restart: unless-stopped
 
   qdrant:
@@ -36,16 +40,71 @@ services:
       - qdrant-data:/qdrant/storage
     restart: unless-stopped
 
-  ollama:
-    container_name: ollama
-    image: ollama/ollama:latest
-    ports:
-      - "127.0.0.1:11434:11434"
+  llama-chat:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    command:
+      - --model
+      - /models/${LLAMA_CHAT_MODEL_FILE:-Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --alias
+      - ${LLAMA_CHAT_MODEL:-local-chat}
+      - --parallel
+      - ${LLAMA_PARALLEL:-1}
+      - --n-gpu-layers
+      - ${LLAMA_N_GPU_LAYERS:-99}
+      - --ctx-size
+      - "${LLAMA_CTX_SIZE:-10240}"
     volumes:
-      - ollama-data:/root/.ollama
+      - ${LLAMA_MODELS_PATH:-./models}:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  llama-embeddings:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    command:
+      - --model
+      - /models/${LLAMA_EMBEDDING_MODEL_FILE:-nomic-embed-text-v1.5.Q4_K_M.gguf}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8081"
+      - --alias
+      - ${LLAMA_EMBEDDING_MODEL:-local-embedding}
+      - --embedding
+      - --pooling
+      - mean
+      - --n-gpu-layers
+      - ${LLAMA_N_GPU_LAYERS:-99}
+      - --ubatch-size
+      - ${LLAMA_EMBEDDING_UBATCH_SIZE:-1024}
+      - --parallel
+      - ${LLAMA_PARALLEL:-1}
+    volumes:
+      - ${LLAMA_MODELS_PATH:-./models}:/models:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     restart: unless-stopped
 
 volumes:
   qdrant-data:
-  ollama-data:
   rosie-audit:

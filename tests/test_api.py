@@ -19,17 +19,22 @@ class FakeKnowledgeBase:
 
 
 class FakeGraph:
+    def __init__(self, answer: str = "Check the service logs. Source: operations.md") -> None:
+        self.answer = answer
+
     def invoke(self, state: dict) -> dict:
         return {
-            "answer": "Check the service logs. Source: operations.md",
+            "answer": self.answer,
             "evidence": [{"text": "Check the service logs.", "source": "operations.md", "kind": "document", "score": 0.9}],
             "runbook_gap": True,
         }
 
 
 def test_health_and_chat_are_documentation_aware(monkeypatch) -> None:
+    timestamps = iter((10.0, 12.3456))
     monkeypatch.setattr(main, "get_knowledge_base", lambda: FakeKnowledgeBase())
     monkeypatch.setattr(main, "get_investigation_graph", lambda: FakeGraph())
+    monkeypatch.setattr(main, "perf_counter", lambda: next(timestamps))
     monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
     client = TestClient(main.app)
 
@@ -37,7 +42,24 @@ def test_health_and_chat_are_documentation_aware(monkeypatch) -> None:
     response = client.post("/api/chat", json={"question": "Why is the service down?"})
     assert response.status_code == 200
     assert response.json()["evidence"][0]["source"] == "operations.md"
+    assert "<p>Check the service logs." in response.json()["answer_html"]
     assert response.json()["runbook_gap"] is True
+    assert response.json()["duration_seconds"] == 2.346
+
+
+def test_chat_renders_markdown_and_sanitizes_unsafe_html(monkeypatch) -> None:
+    answer = "**Check logs**\n\n<script>alert(1)</script> [unsafe](javascript:alert(1))"
+    monkeypatch.setattr(main, "get_knowledge_base", lambda: FakeKnowledgeBase())
+    monkeypatch.setattr(main, "get_investigation_graph", lambda: FakeGraph(answer))
+    monkeypatch.setattr(main, "perf_counter", lambda: 1.0)
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+
+    response = TestClient(main.app).post("/api/chat", json={"question": "Check logs"})
+
+    assert response.status_code == 200
+    assert "<strong>Check logs</strong>" in response.json()["answer_html"]
+    assert "<script>" not in response.json()["answer_html"]
+    assert "javascript:" not in response.json()["answer_html"]
 
 
 def test_home_page_exposes_source_sync_and_last_sync_status() -> None:
@@ -48,6 +70,7 @@ def test_home_page_exposes_source_sync_and_last_sync_status() -> None:
     assert 'id="sync-sources"' in response.text
     assert 'id="sync-status"' in response.text
     assert "'/api/ingest/sources'" in response.text
+    assert "result.duration_seconds" in response.text
     assert "rosie-last-successful-source-sync" in response.text
 
 

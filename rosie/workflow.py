@@ -1,7 +1,7 @@
 import re
 from typing import TypedDict
 
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 
@@ -28,14 +28,16 @@ def load_system_prompt() -> str:
 
 def build_investigation_graph(knowledge: KnowledgeBase | None = None, llm=None):
     knowledge = knowledge or KnowledgeBase()
-    llm = llm or ChatOllama(
-        model=settings.ollama_model,
-        base_url=settings.ollama_base_url,
+    llm = llm or ChatOpenAI(
+        model=settings.llama_chat_model,
+        base_url=settings.llama_chat_base_url,
+        api_key="llama.cpp",
+        max_tokens=settings.chat_max_output_tokens,
         temperature=0,
     )
 
     def observe(state: InvestigationState) -> dict:
-        evidence = knowledge.search(state["question"], limit=6)
+        evidence = knowledge.search(state["question"], limit=settings.chat_evidence_limit)
         runbook_evidence = knowledge.search(state["question"], kind="runbook", limit=1)
         return {"evidence": evidence, "runbook_gap": not runbook_evidence}
 
@@ -78,11 +80,12 @@ def build_investigation_graph(knowledge: KnowledgeBase | None = None, llm=None):
 def draft_runbook(incident: str, evidence: list[dict[str, str | float]]):
     from rosie.models import Runbook
 
-    llm = ChatOllama(
-        model=settings.ollama_model,
-        base_url=settings.ollama_base_url,
+    llm = ChatOpenAI(
+        model=settings.llama_chat_model,
+        base_url=settings.llama_chat_base_url,
+        api_key="llama.cpp",
         temperature=0,
-    ).with_structured_output(Runbook)
+    ).with_structured_output(Runbook, method="json_schema")
     context = "\n\n".join(f"{item['source']}: {item['text']}" for item in evidence)
     return llm.invoke(
         [
