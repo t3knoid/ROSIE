@@ -229,6 +229,7 @@ These are target outcomes; they do not imply that live infrastructure observatio
 - [Lessons learned](lessons-learned.md) captures operational findings.
 - [Model configurations](model-configurations.md) covers llama.cpp endpoints and GGUF model configuration.
 - [GPU acceleration](gpu-acceleration.md) explains NVIDIA GPU setup and operation with llama.cpp and ROSIE, using the Tesla P4 as the example.
+- [Tesla P4 thermal controller](p4-thermal-controller.md) documents the optional host-side fan controller, dry-run, systemd deployment, ROSIE status endpoint, and rollback.
 - [Integrations](integrations.md) describes current service adapters.
 - [Runbook authoring standard](runbook-authoring-standard.md) defines canonical runbook content.
 - [Developer guide](developer-guide.md) describes local setup and checks.

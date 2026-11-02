@@ -25,6 +25,7 @@ services:
       - ./knowledge:/app/knowledge:ro
       - ./docs/rosie:/app/docs/rosie
       - rosie-audit:/app/data
+      - /run/p4-thermal:/run/p4-thermal:ro
     depends_on:
       - qdrant
       - llama-chat

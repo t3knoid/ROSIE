@@ -89,4 +89,4 @@ pip install -e '.[dev]'
 pytest
 ```
 
-See [docs/rosie](docs/rosie/README.md) for the architecture, safety principles, and development notes, including the [Tesla P4 GPU operations guide](docs/rosie/gpu-acceleration.md).
+See [docs/rosie](docs/rosie/README.md) for the architecture, safety principles, and development notes, including the [Tesla P4 GPU operations guide](docs/rosie/gpu-acceleration.md) and [host thermal-controller deployment guide](docs/rosie/p4-thermal-controller.md).

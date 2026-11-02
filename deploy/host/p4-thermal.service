@@ -1,0 +1,24 @@
+[Unit]
+Description=Tesla P4 thermal controller (Supermicro fan mode and GPU status)
+After=nvidia-persistenced.service
+# Start before Docker so /run/p4-thermal exists when ROSIE's container mounts it
+Before=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/p4-thermal.py
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+
+# Creates /run/p4-thermal for the status file. Preserve keeps the directory when the
+# service stops, so ROSIE's bind mount does not go stale.
+RuntimeDirectory=p4-thermal
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+
+# Safe state whenever the controller stops, including crashes (the leading - ignores failures)
+ExecStopPost=-/usr/bin/ipmitool raw 0x30 0x45 0x01 0x01
+
+[Install]
+WantedBy=multi-user.target

@@ -15,9 +15,10 @@ from rosie.rendering import markdown_to_safe_html
 from rosie.runbooks import to_markdown
 from rosie.web_sources import crawl_html_source
 from rosie.workflow import build_investigation_graph, draft_runbook
+from rosie.gpu_status import router as gpu_router
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
-
+app.include_router(gpu_router)
 
 @lru_cache
 def get_knowledge_base() -> KnowledgeBase:
