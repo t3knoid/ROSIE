@@ -128,6 +128,15 @@ curl --fail --silent --show-error http://127.0.0.1:8001/api/health/gpu | python3
 
 The endpoint adds `age_seconds` and `stale`; by default, data older than 30 seconds is marked stale. If the file is absent or unreadable, it returns `available: false` with a reason rather than failing ROSIE's normal health endpoint. `ROSIE_GPU_STATUS_PATH` and `ROSIE_GPU_STATUS_MAX_AGE` can override the endpoint's path and freshness limit. Do not publish this telemetry endpoint to untrusted networks; the current ROSIE API is intended for trusted networks.
 
+The Operations Desk hardware panel shows the first GPU's model (`gpu.name`) and
+used/total VRAM in MiB (`gpu.memory_used_mib` / `gpu.memory_total_mib`), including
+the percentage used. It refreshes every 10 seconds while the page is visible;
+the host controller samples every five seconds by default. Missing model or memory
+readings are labeled unavailable, and stale readings are not displayed as live.
+Older installed controllers already report memory but must be updated using the
+reviewed host-service procedure above to include the model name. Updating this
+repository alone does not update the installed host service.
+
 ## 5. Tune Thresholds
 
 All controller thresholds are command-line flags. To persist overrides under systemd, create a drop-in rather than editing the installed unit:

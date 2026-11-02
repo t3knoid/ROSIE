@@ -44,6 +44,20 @@ def test_marks_old_status_as_stale(status_file) -> None:
     assert result["age_seconds"] >= 120
 
 
+def test_preserves_gpu_model_and_live_memory_values(status_file) -> None:
+    for used_memory in (0, 6205):
+        gpu = {
+            "name": "Tesla P4",
+            "temperature_c": 73,
+            "memory_used_mib": used_memory,
+            "memory_total_mib": 7680,
+        }
+        write_status(status_file, gpu=gpu)
+        result = gpu_status.gpu_status()
+        assert result["stale"] is False
+        assert result["gpu"] == gpu
+
+
 def test_status_without_timestamp_is_stale(status_file) -> None:
     status_file.write_text(json.dumps({"state": "ok"}))
     result = gpu_status.gpu_status()

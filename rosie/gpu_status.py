@@ -19,7 +19,7 @@ MAX_AGE_SECONDS = float(os.environ.get("ROSIE_GPU_STATUS_MAX_AGE", "30"))
 
 @router.get("/gpu")
 def gpu_status() -> dict[str, object]:
-    """Latest GPU temperature, clocks, throttle flags and fan RPM from the host controller."""
+    """Latest GPU model, VRAM use, temperature, clocks, throttle flags and fan RPM."""
     try:
         data = json.loads(STATUS_PATH.read_text())
     except FileNotFoundError:

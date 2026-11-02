@@ -16,6 +16,7 @@ Try it first with:  sudo ./p4-thermal.py --once --dry-run
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import logging
 import os
@@ -36,7 +37,7 @@ FAN_MODES = {"standard": 0x00, "full": 0x01, "optimal": 0x02, "heavyio": 0x04}
 
 GPU_QUERY = (
     "temperature.gpu,clocks.sm,clocks.max.sm,power.draw,utilization.gpu,"
-    "memory.used,memory.total,pstate,clocks_event_reasons.active"
+    "memory.used,memory.total,pstate,clocks_event_reasons.active,name"
 )
 
 THROTTLE_BITS = {
@@ -79,14 +80,15 @@ def read_gpu() -> dict:
     lines = out.strip().splitlines()
     if not lines:
         raise RuntimeError("nvidia-smi returned no GPUs")
-    fields = [f.strip() for f in lines[0].split(",")]
-    if len(fields) < 9:
+    fields = [f.strip() for f in next(csv.reader([lines[0]], skipinitialspace=True))]
+    if len(fields) < 10:
         raise RuntimeError(f"unexpected nvidia-smi output: {lines[0]!r}")
     try:
         mask = int(fields[8], 16)
     except ValueError:
         mask = 0
     return {
+        "name": fields[9] if fields[9] not in ("", "[N/A]", "N/A") else None,
         "temperature_c": _int(fields[0]),
         "sm_clock_mhz": _int(fields[1]),
         "max_sm_clock_mhz": _int(fields[2]),

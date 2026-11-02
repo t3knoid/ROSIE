@@ -90,24 +90,58 @@ def test_status_is_error_without_gpu(p4) -> None:
 
 
 def test_read_gpu_parses_csv_and_throttle_flags(p4, monkeypatch) -> None:
-    line = "88, 455, 1531, 38.92, 100, 6205, 7680, P0, 0x0000000000000068\n"
-    monkeypatch.setattr(p4, "run", lambda cmd, timeout=10.0: line)
+    line = "88, 455, 1531, 38.92, 100, 6205, 7680, P0, 0x0000000000000068, Tesla P4\n"
+
+    def fake_run(cmd, timeout=10.0):
+        assert cmd == [
+            "nvidia-smi",
+            f"--query-gpu={p4.GPU_QUERY}",
+            "--format=csv,noheader,nounits",
+        ]
+        assert p4.GPU_QUERY.split(",")[-1] == "name"
+        return line
+
+    monkeypatch.setattr(p4, "run", fake_run)
     gpu = p4.read_gpu()
+    assert gpu["name"] == "Tesla P4"
     assert gpu["temperature_c"] == 88
     assert gpu["sm_clock_mhz"] == 455
     assert gpu["power_w"] == 38.92
+    assert gpu["memory_used_mib"] == 6205
     assert gpu["memory_total_mib"] == 7680
     assert gpu["thermally_throttled"] is True
     assert {"sw_thermal_slowdown", "hw_thermal_slowdown", "hw_slowdown"} <= set(gpu["throttle_reasons"])
 
 
 def test_read_gpu_handles_unavailable_fields(p4, monkeypatch) -> None:
-    line = "70, 746, 1531, [N/A], 0, 100, 7680, P0, 0x0000000000000000\n"
+    line = "70, 746, 1531, [N/A], 0, [N/A], [N/A], P0, 0x0000000000000000, [N/A]\n"
     monkeypatch.setattr(p4, "run", lambda cmd, timeout=10.0: line)
     gpu = p4.read_gpu()
     assert gpu["power_w"] is None
+    assert gpu["name"] is None
+    assert gpu["memory_used_mib"] is None
+    assert gpu["memory_total_mib"] is None
     assert gpu["thermally_throttled"] is False
     assert gpu["throttle_reasons"] == []
+
+
+def test_read_gpu_handles_quoted_model_and_uses_first_gpu(p4, monkeypatch) -> None:
+    line = (
+        '70, 746, 1531, 20, 0, 0, 7680, P0, 0x0, "Example GPU, Model 1"\n'
+        "60, 746, 1531, 20, 0, 100, 8192, P0, 0x0, Second GPU\n"
+    )
+    monkeypatch.setattr(p4, "run", lambda cmd, timeout=10.0: line)
+    gpu = p4.read_gpu()
+    assert gpu["name"] == "Example GPU, Model 1"
+    assert gpu["memory_used_mib"] == 0
+    assert gpu["memory_total_mib"] == 7680
+
+
+@pytest.mark.parametrize("line", ["", "70, 746, 1531, 20, 0, 100, 7680, P0, 0x0\n"])
+def test_read_gpu_rejects_missing_fields(p4, monkeypatch, line) -> None:
+    monkeypatch.setattr(p4, "run", lambda cmd, timeout=10.0: line)
+    with pytest.raises(RuntimeError):
+        p4.read_gpu()
 
 
 def test_read_fans_ignores_missing_sensors(p4, monkeypatch) -> None:

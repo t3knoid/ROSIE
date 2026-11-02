@@ -67,7 +67,7 @@
       <button id="sync-sources" type="button">Sync sources</button>
       <p id="sync-status" role="status" aria-live="polite">Last successful sync in this browser: never.</p>
       <section id="gpu-panel" class="hw" hidden>
-        <h2>Hardware</h2>
+        <h2>GPU Hardware</h2>
         <p id="gpu-summary" class="hw-line"></p>
         <p id="gpu-detail" class="hw-detail"></p>
       </section>
@@ -243,6 +243,20 @@
         if (gpu.power_w != null) perf.push(`${Math.round(gpu.power_w)} W`);
         if (gpu.utilization_pct != null) perf.push(`${gpu.utilization_pct}% busy`);
         const lines = [perf.join(' \u00b7 ')];
+        lines.unshift(`Video card: ${gpu.name || 'model unavailable'}`);
+        const usedMemory = gpu.memory_used_mib;
+        const totalMemory = gpu.memory_total_mib;
+        const hasUsedMemory = Number.isFinite(usedMemory) && usedMemory >= 0;
+        const hasTotalMemory = Number.isFinite(totalMemory) && totalMemory > 0;
+        if (hasUsedMemory && hasTotalMemory) {
+          lines.push(`VRAM: ${usedMemory.toLocaleString()} / ${totalMemory.toLocaleString()} MiB used (${Math.round(usedMemory / totalMemory * 100)}%)`);
+        } else if (hasTotalMemory) {
+          lines.push(`VRAM: ${totalMemory.toLocaleString()} MiB total; usage unavailable`);
+        } else if (hasUsedMemory) {
+          lines.push(`VRAM: ${usedMemory.toLocaleString()} MiB used; total unavailable`);
+        } else {
+          lines.push('VRAM: unavailable');
+        }
         const fans = (status.fans || []).map(fan => `${fan.name} ${fan.rpm} RPM`).join(', ');
         if (fans || status.fan_mode) lines.push(`Fans: ${fans || 'none reporting'}${status.fan_mode ? ` (${status.fan_mode} mode)` : ''}`);
         if (gpu.thermally_throttled) lines.push('Thermal slowdown is active: answers will be slower.');
