@@ -62,6 +62,19 @@ def test_chat_renders_markdown_and_sanitizes_unsafe_html(monkeypatch) -> None:
     assert "javascript:" not in response.json()["answer_html"]
 
 
+def test_chat_linkifies_plain_urls_with_underscores(monkeypatch) -> None:
+    url = "https://homelab.refol.us/reverse-proxy_with_oauth2_integration.html"
+    monkeypatch.setattr(main, "get_knowledge_base", lambda: FakeKnowledgeBase())
+    monkeypatch.setattr(main, "get_investigation_graph", lambda: FakeGraph(f"See {url}."))
+    monkeypatch.setattr(main, "perf_counter", lambda: 1.0)
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+
+    response = TestClient(main.app).post("/api/chat", json={"question": "Show the reference"})
+
+    assert response.status_code == 200
+    assert f'<a href="{url}"' in response.json()["answer_html"]
+
+
 def test_home_page_exposes_source_sync_and_last_sync_status() -> None:
     response = TestClient(main.app).get("/")
 

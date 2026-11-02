@@ -32,7 +32,10 @@ _ALLOWED_TAGS = {
 
 
 def markdown_to_safe_html(source: str) -> str:
-    rendered = markdown.markdown(source, extensions=["fenced_code", "sane_lists", "tables"])
+    rendered = markdown.markdown(
+        source,
+        extensions=["fenced_code", "sane_lists", "tables", "pymdownx.magiclink"],
+    )
     return nh3.clean(
         rendered,
         tags=_ALLOWED_TAGS,
