@@ -26,6 +26,18 @@ def load_system_prompt() -> str:
     )
 
 
+def _evidence_context(evidence: list[dict[str, str | float]]) -> str:
+    by_source: dict[str, list[dict[str, str | float]]] = {}
+    for item in evidence:
+        by_source.setdefault(str(item["source"]), []).append(item)
+    blocks = []
+    for source, items in by_source.items():
+        kinds = ", ".join(dict.fromkeys(str(item["kind"]) for item in items))
+        passages = "\n\n".join(dict.fromkeys(str(item["text"]) for item in items))
+        blocks.append(f"Source: {source} ({kinds})\n{passages}")
+    return "\n\n".join(blocks)
+
+
 def build_investigation_graph(knowledge: KnowledgeBase | None = None, llm=None):
     knowledge = knowledge or KnowledgeBase()
     llm = llm or ChatOpenAI(
@@ -43,12 +55,7 @@ def build_investigation_graph(knowledge: KnowledgeBase | None = None, llm=None):
 
     def examine(state: InvestigationState) -> dict[str, str]:
         evidence = state.get("evidence", [])
-        if evidence:
-            context = "\n\n".join(
-                f"Source: {item['source']} ({item['kind']})\n{item['text']}" for item in evidence
-            )
-        else:
-            context = "No matching local documentation was found."
+        context = _evidence_context(evidence) or "No matching local documentation was found."
         user_context = f"""Investigate this user question:
     {state['question']}
 
@@ -86,7 +93,7 @@ def draft_runbook(incident: str, evidence: list[dict[str, str | float]]):
         api_key="llama.cpp",
         temperature=0,
     ).with_structured_output(Runbook, method="json_schema")
-    context = "\n\n".join(f"{item['source']}: {item['text']}" for item in evidence)
+    context = _evidence_context(evidence)
     return llm.invoke(
         [
             SystemMessage(content=load_system_prompt()),

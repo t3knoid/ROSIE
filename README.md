@@ -56,6 +56,8 @@ Open `http://localhost:8001` on the host. From another device on the same LAN, u
 
 Both llama.cpp servers must be running with their configured models available before chat, ingestion, or runbook generation can use inference and embeddings. `RELEVANCE_THRESHOLD` (default `0.35`) controls the minimum Qdrant cosine score returned as evidence.
 
+Investigation and runbook-draft prompts group evidence by source, listing each source once with its retrieved kinds. Identical passages from that source are included once; distinct passages are preserved. The chat's evidence list also groups citations by source. If an older index labels a page as both document and runbook, re-sync sources to correct its stored classification.
+
 For faster chat responses on smaller GPUs, ROSIE defaults to at most two evidence passages (`CHAT_EVIDENCE_LIMIT`) and 512 generated tokens (`CHAT_MAX_OUTPUT_TOKENS`). Raise these `.env` values for more context or longer answers, knowing that more passages increase prompt processing time and a higher output limit allows longer generation.
 
 ## Local Development
