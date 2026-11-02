@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     web_source_max_pages: int = 100
     web_source_timeout_seconds: float = 15
     web_source_max_page_bytes: int = 2_000_000
-    chat_evidence_limit: int = 4
+    chat_evidence_limit: int = 2
     chat_max_output_tokens: int = 512
     llama_chat_base_url: str = "http://localhost:8080/v1"
     llama_embedding_base_url: str = "http://localhost:8081/v1"

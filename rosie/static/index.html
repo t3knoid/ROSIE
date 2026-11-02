@@ -32,7 +32,9 @@
     aside { border-top: 4px solid var(--lime); padding-top: 16px; }
     aside h2 { margin: 0 0 8px; font: 700 14px 'Trebuchet MS', sans-serif; }
     aside p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
-    #sources { padding-left: 18px; color: var(--muted); font: 13px/1.6 'Trebuchet MS', sans-serif; overflow-wrap: anywhere; }
+    .answer-evidence { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .answer-evidence ul { margin: 0; padding-left: 18px; color: var(--muted); font: 13px/1.6 'Trebuchet MS', sans-serif; overflow-wrap: anywhere; }
+    .answer-evidence li + li { margin-top: 4px; }
     .notice { color: var(--coral); font: 13px 'Trebuchet MS', sans-serif; }
     #chat-status { min-height: 1.5em; color: var(--muted); font: 13px 'Trebuchet MS', sans-serif; }
     #sync-sources { min-height: 40px; }
@@ -57,9 +59,6 @@
       <p>Refresh the configured documentation and runbook sources.</p>
       <button id="sync-sources" type="button">Sync sources</button>
       <p id="sync-status" role="status" aria-live="polite">Last successful sync in this browser: never.</p>
-      <h2>Evidence consulted</h2>
-      <p>Local runbooks and architecture documentation take priority over general guidance.</p>
-      <ul id="sources"><li>Sources appear here after an investigation.</li></ul>
     </aside>
   </main>
   <script>
@@ -114,7 +113,6 @@
       event.preventDefault();
       const error = document.querySelector('#error');
       const thread = document.querySelector('#thread');
-      const sources = document.querySelector('#sources');
       const question = input.value.trim();
       if (!question) return;
       isInvestigating = true;
@@ -146,27 +144,40 @@
         if (typeof result.answer_html === 'string') answerContent.innerHTML = result.answer_html;
         else answerContent.textContent = result.answer?.trim() || 'The model returned an empty answer. Check the service logs.';
         answer.append(answerContent);
-        thread.append(answer);
-        chatStatus.textContent = '';
-        sources.replaceChildren();
-        if (result.evidence.length) result.evidence.forEach(item => {
+        const evidenceBlock = document.createElement('div');
+        evidenceBlock.className = 'answer-evidence';
+        const evidenceLabel = document.createElement('small');
+        evidenceLabel.textContent = 'Evidence consulted';
+        evidenceBlock.append(evidenceLabel);
+        const sourceList = document.createElement('ul');
+        evidenceBlock.append(sourceList);
+        const evidenceBySource = new Map();
+        result.evidence.forEach(item => {
+          const entry = evidenceBySource.get(item.source) || { kinds: new Set() };
+          entry.kinds.add(item.kind);
+          evidenceBySource.set(item.source, entry);
+        });
+        if (evidenceBySource.size) evidenceBySource.forEach((entry, source) => {
           const li = document.createElement('li');
           let sourceUrl;
-          try { sourceUrl = new URL(item.source); } catch {}
+          try { sourceUrl = new URL(source); } catch {}
           if (sourceUrl && ['http:', 'https:'].includes(sourceUrl.protocol)) {
             const link = document.createElement('a');
             link.href = sourceUrl.href;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
-            link.textContent = item.source;
+            link.textContent = source;
             li.append(link);
           } else {
-            li.append(document.createTextNode(item.source));
+            li.append(document.createTextNode(source));
           }
-          li.append(document.createTextNode(` · ${item.kind}`));
-          sources.append(li);
+          li.append(document.createTextNode(` · ${[...entry.kinds].join(', ')}`));
+          sourceList.append(li);
         });
-        else sources.innerHTML = '<li>No matching local documents found.</li>';
+        else sourceList.innerHTML = '<li>No matching local documents found.</li>';
+        answer.append(evidenceBlock);
+        thread.append(answer);
+        chatStatus.textContent = '';
         thread.scrollIntoView({ behavior: 'smooth', block: 'end' });
       } catch (err) {
         chatStatus.textContent = '';
