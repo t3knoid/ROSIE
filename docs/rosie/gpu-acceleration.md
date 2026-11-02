@@ -15,7 +15,7 @@ Both services use `ghcr.io/ggml-org/llama.cpp:server-cuda`, receive an NVIDIA GP
 
 ## Memory and Context Sizing
 
-The Tesla P4 has 8 GB of VRAM. ROSIE's default Llama 3.1 8B Q4_K_M chat weights occupy about 4.9 GB; the context cache and CUDA runtime need additional memory. The embedding model is much smaller but adds its own GPU allocation (allow a few hundred MB). Both servers share the same card, so this configuration can fit on a P4, but available headroom depends on other GPU processes and runtime settings. The single-slot default avoids multiplying context-cache allocation across several simultaneous requests.
+The Tesla P4 has 8 GB of VRAM. ROSIE's default Llama 3.2 3B Q4_K_M chat weights occupy about 2.02 GB; the context cache and CUDA runtime need additional memory. The embedding model is much smaller but adds its own GPU allocation (allow a few hundred MB). Both servers share the same card, leaving more VRAM headroom than the previous 8B model, although available memory still depends on other GPU processes and runtime settings. The single-slot default avoids multiplying context-cache allocation across several simultaneous requests.
 
 Keep the chat context as small as the workload allows to avoid exhausting VRAM. ROSIE sets `LLAMA_CTX_SIZE=10240` by default, corresponding to llama.cpp's `-c 10240` option; this accommodates the observed 7,666-token prompt with some room for a response. If the P4 reports CUDA out-of-memory, reduce `LLAMA_CTX_SIZE` and/or `LLAMA_N_GPU_LAYERS` as described in [Tune VRAM Use](#8-tune-vram-use).
 
@@ -94,7 +94,7 @@ The repository defaults use `./models` and request up to 99 GPU layers. Check th
 
 ```sh
 grep -E '^(LLAMA_MODELS_PATH|LLAMA_N_GPU_LAYERS|LLAMA_CTX_SIZE|LLAMA_CHAT_MODEL_FILE|LLAMA_EMBEDDING_MODEL_FILE)=' .env
-ls -lh ./models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf ./models/nomic-embed-text-v1.5.Q4_K_M.gguf
+ls -lh ./models/Llama-3.2-3B-Instruct-Q4_K_M.gguf ./models/nomic-embed-text-v1.5.Q4_K_M.gguf
 ```
 
 `LLAMA_N_GPU_LAYERS=99` asks llama.cpp to offload all layers that the model has. It does not reserve 99 layers or guarantee that all layers fit in VRAM. If you use different filenames or a different model directory, update the corresponding `.env` values. The [model configuration guide](model-configurations.md) links the default sources and licenses.
