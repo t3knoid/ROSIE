@@ -19,15 +19,15 @@ Requires Docker Compose, NVIDIA Container Toolkit, enough memory and disk for th
 cp .env.example .env
 ```
 
-The default chat file is the Q4_K_M quantization from [bartowski's Llama 3.1 8B Instruct GGUF repository](https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF) (about 4.9 GB). The default embedding file is from [Nomic's nomic-embed-text-v1.5 GGUF repository](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF) (about 84 MB, Apache-2.0). Review each model card and license; the Llama file is subject to Meta's Llama 3.1 license terms.
+The default chat file is the Q4_K_M quantization from [bartowski's Llama 3.2 3B Instruct GGUF repository](https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF) (about 2.02 GB). The default embedding file is from [Nomic's nomic-embed-text-v1.5 GGUF repository](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF) (about 84 MB, Apache-2.0). Review each model card and license; the chat model is subject to Meta's Llama 3.2 license terms.
 
 Download the exact files configured in `.env.example` into `./models` with `curl`:
 
 ```sh
 mkdir -p models
 curl --location --fail --retry 3 --continue-at - \
-	'https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf?download=true' \
-	--output models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
+	'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true' \
+	--output models/Llama-3.2-3B-Instruct-Q4_K_M.gguf
 curl --location --fail --retry 3 --continue-at - \
 	'https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf?download=true' \
 	--output models/nomic-embed-text-v1.5.Q4_K_M.gguf
