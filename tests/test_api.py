@@ -78,6 +78,23 @@ def test_chat_linkifies_plain_urls_with_underscores(monkeypatch) -> None:
     assert f'<a href="{url}"' in response.json()["answer_html"]
 
 
+def test_chat_linkifies_backtick_wrapped_source_urls(monkeypatch) -> None:
+    urls = [
+        "https://homelab.refol.us/add_truenas_local_users.html",
+        "https://homelab.refol.us/truenas_role_contributor_guide.html",
+    ]
+    answer = f"1. `{urls[0]}` (runbook)\n2. `{urls[1]}` (document)"
+    monkeypatch.setattr(main, "get_investigation_graph", lambda: FakeGraph(answer))
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+
+    response = TestClient(main.app).post("/api/chat", json={"question": "Show the references"})
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == answer
+    for url in urls:
+        assert f'<a href="{url}"' in response.json()["answer_html"]
+
+
 def test_home_page_exposes_source_sync_and_last_sync_status() -> None:
     response = TestClient(main.app).get("/")
 

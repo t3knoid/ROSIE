@@ -58,6 +58,8 @@ Both llama.cpp servers must be running with their configured models available be
 
 Investigation and runbook-draft prompts group evidence by source, listing each source once with its retrieved kinds. Identical passages from that source are included once; distinct passages are preserved. The chat's evidence list also groups citations by source. If an older index labels a page as both document and runbook, re-sync sources to correct its stored classification.
 
+Chat answers render plain HTTP(S) URLs and URL-only inline code as clickable links. Commands and fenced or indented code blocks remain unchanged; rendered HTML is sanitized.
+
 For faster chat responses on smaller GPUs, ROSIE defaults to at most two evidence passages (`CHAT_EVIDENCE_LIMIT`) and 512 generated tokens (`CHAT_MAX_OUTPUT_TOKENS`). Raise these `.env` values for more context or longer answers, knowing that more passages increase prompt processing time and a higher output limit allows longer generation.
 
 ## Local Development
