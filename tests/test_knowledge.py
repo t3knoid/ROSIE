@@ -1,5 +1,8 @@
 from types import SimpleNamespace
 
+import pytest
+from qdrant_client import QdrantClient
+
 from rosie.knowledge import KnowledgeBase, LlamaCppEmbeddingClient
 
 
@@ -76,3 +79,32 @@ def test_ingest_replaces_existing_source_chunks_without_duplicates() -> None:
     assert embeddings.calls == 2
     assert knowledge.client.ids == first_ids
     assert any("echo" in point["text"] for point in knowledge.client.points.values())
+
+
+@pytest.mark.parametrize("kind", ["document", "runbook"])
+@pytest.mark.parametrize("unchanged", [False, True])
+def test_source_sync_replaces_conflicting_kind_without_touching_other_sources(kind, unchanged) -> None:
+    knowledge = KnowledgeBase.__new__(KnowledgeBase)
+    knowledge.client = QdrantClient(":memory:")
+    knowledge.embeddings = FakeEmbeddings()
+    knowledge.collection = "test"
+    source = "https://example.test/page.html"
+    other_source = "https://example.test/other.html"
+    other_kind = "runbook" if kind == "document" else "document"
+
+    try:
+        knowledge.ingest("Other source content", other_source, other_kind)
+        knowledge.ingest("Incorrect classification", source, other_kind)
+        if unchanged:
+            knowledge.ingest("Current content", source, kind)
+        calls = knowledge.embeddings.calls
+
+        knowledge.ingest("Current content", source, kind, replace_kind=True)
+
+        points, _ = knowledge.client.scroll(knowledge.collection, with_payload=True)
+        assert {(point.payload["source"], point.payload["kind"]) for point in points} == {
+            (source, kind), (other_source, other_kind),
+        }
+        assert knowledge.embeddings.calls == calls + (0 if unchanged else 1)
+    finally:
+        knowledge.client.close()

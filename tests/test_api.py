@@ -7,9 +7,12 @@ from rosie.web_sources import CrawlResult, WebPage
 class FakeKnowledgeBase:
     def __init__(self) -> None:
         self.ingested: list[tuple[str, str, str]] = []
+        self.reclassified: list[str] = []
 
-    def ingest(self, text: str, source: str, kind: str) -> int:
+    def ingest(self, text: str, source: str, kind: str, *, replace_kind: bool = False) -> int:
         self.ingested.append((text, source, kind))
+        if replace_kind:
+            self.reclassified.append(source)
         return 1
 
     def search(self, query: str, kind: str | None = None, limit: int = 5) -> list[dict[str, str | float]]:
@@ -111,6 +114,7 @@ def test_ingest_configured_sources_indexes_overview_and_runbooks(monkeypatch) ->
 
     def fake_crawl(url: str, **kwargs) -> CrawlResult:
         requested.append(url)
+        assert kwargs["runbook_index"] == (url == main.settings.runbook_source_url)
         kind_title = "Home Lab Overview" if url == main.settings.documentation_source_url else "Runbook"
         return CrawlResult(pages=[WebPage(url=url, title=kind_title, text="Operational guidance.")], errors=[])
 
@@ -125,3 +129,28 @@ def test_ingest_configured_sources_indexes_overview_and_runbooks(monkeypatch) ->
     assert response.json()["pages_by_kind"] == {"document": 1, "runbook": 1}
     assert requested == [main.settings.documentation_source_url, main.settings.runbook_source_url]
     assert [item[2] for item in knowledge.ingested] == ["document", "runbook"]
+
+
+def test_source_sync_counts_overlapping_pages_once_with_runbook_priority(monkeypatch) -> None:
+    knowledge = FakeKnowledgeBase()
+    runbook = WebPage(url="https://homelab.test/recovery.html", title="Recovery", text="Check logs.")
+    document = WebPage(url="https://homelab.test/overview.html", title="Overview", text="Architecture.")
+
+    def fake_crawl(url: str, **kwargs) -> CrawlResult:
+        return CrawlResult(
+            pages=[runbook] if kwargs["runbook_index"] else [document, runbook],
+            errors=[],
+        )
+
+    monkeypatch.setattr(main, "get_knowledge_base", lambda: knowledge)
+    monkeypatch.setattr(main, "crawl_html_source", fake_crawl)
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+
+    result = TestClient(main.app).post("/api/ingest/sources").json()
+
+    assert result["pages"] == result["chunks"] == 2
+    assert result["pages_by_kind"] == {"document": 1, "runbook": 1}
+    assert [(source, kind) for _, source, kind in knowledge.ingested] == [
+        (document.url, "document"), (runbook.url, "runbook"),
+    ]
+    assert knowledge.reclassified == [document.url, runbook.url]

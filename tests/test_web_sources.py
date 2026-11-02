@@ -52,3 +52,44 @@ def test_crawl_enforces_page_limit() -> None:
 
     assert len(result.pages) == 1
     assert requested == ["https://homelab.test/"]
+
+
+def test_runbook_index_excludes_navigation_index_and_recursive_links() -> None:
+    requested: list[str] = []
+    bodies = {
+        "/runbooks.html": """
+            <header><a href="/overview.html">Overview</a></header>
+            <nav><a href="/">Home</a><a href="/runbooks.html">Runbooks</a></nav>
+            <main><a href="/recovery.html">Recovery</a>
+            <a href="/recovery.html#checks">Checks</a>
+            <a href="https://other.test/runbook.html">External</a></main>
+            <footer><a href="/about.html">About</a></footer>
+        """,
+        "/recovery.html": '<h1>Recovery</h1><a href="/architecture.html">Reference</a>',
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(request.url.path)
+        return httpx.Response(200, headers={"content-type": "text/html"}, text=bodies[request.url.path])
+
+    result = crawl_html_source(
+        "https://homelab.test/runbooks.html",
+        runbook_index=True,
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert requested == ["/runbooks.html", "/recovery.html"]
+    assert [page.url for page in result.pages] == ["https://homelab.test/recovery.html"]
+    assert not result.errors
+
+
+def test_empty_runbook_index_does_not_count_as_a_runbook() -> None:
+    result = crawl_html_source(
+        "https://homelab.test/runbooks.html",
+        runbook_index=True,
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, headers={"content-type": "text/html"}, text="<h1>Runbooks</h1>")
+        ),
+    )
+    assert result.pages == []
+    assert result.errors == []

@@ -32,7 +32,7 @@ class KnowledgeBase:
         )
         self.collection = settings.qdrant_collection
 
-    def ingest(self, text: str, source: str, kind: str = "document") -> int:
+    def ingest(self, text: str, source: str, kind: str = "document", *, replace_kind: bool = False) -> int:
         passages = chunks(text)
         if not passages:
             return 0
@@ -69,6 +69,8 @@ class KnowledgeBase:
             existing_passages.get(point_id) == passage
             for point_id, passage in zip(point_ids, passages, strict=True)
         ):
+            if replace_kind:
+                self._delete_other_kinds(source, kind)
             return len(passages)
 
         vectors = self.embeddings.embed_documents(passages)
@@ -94,7 +96,21 @@ class KnowledgeBase:
                 collection_name=self.collection,
                 points_selector=models.PointIdsList(points=list(stale_ids)),
             )
+        if replace_kind:
+            self._delete_other_kinds(source, kind)
         return len(passages)
+
+    def _delete_other_kinds(self, source: str, kind: str) -> None:
+        self.client.delete(
+            collection_name=self.collection,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[models.FieldCondition(key="source", match=models.MatchValue(value=source))],
+                    must_not=[models.FieldCondition(key="kind", match=models.MatchValue(value=kind))],
+                )
+            ),
+            wait=True,
+        )
 
     def search(self, query: str, kind: str | None = None, limit: int = 5) -> list[dict[str, str | float]]:
         if not self.client.collection_exists(self.collection):

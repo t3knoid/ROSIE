@@ -13,7 +13,7 @@ from rosie.models import ChatRequest, ChatResponse, Evidence, PublishRequest, Ru
 from rosie.publisher import GitRepositoryPublisher
 from rosie.rendering import markdown_to_safe_html
 from rosie.runbooks import to_markdown
-from rosie.web_sources import crawl_html_source
+from rosie.web_sources import WebPage, crawl_html_source
 from rosie.workflow import build_investigation_graph, draft_runbook
 from rosie.gpu_status import router as gpu_router
 
@@ -98,6 +98,7 @@ def ingest_configured_sources() -> dict[str, object]:
     pages_by_kind = {"document": 0, "runbook": 0}
     errors: list[str] = []
     knowledge = get_knowledge_base()
+    pages: dict[str, tuple[WebPage, str]] = {}
 
     for source_url, kind in sources:
         try:
@@ -106,16 +107,20 @@ def ingest_configured_sources() -> dict[str, object]:
                 max_pages=settings.web_source_max_pages,
                 timeout_seconds=settings.web_source_timeout_seconds,
                 max_page_bytes=settings.web_source_max_page_bytes,
+                runbook_index=kind == "runbook",
             )
         except ValueError as error:
             errors.append(f"{source_url}: {error}")
             continue
         errors.extend(result.errors)
         for page in result.pages:
-            text = f"{page.title}\nSource: {page.url}\n\n{page.text}"
-            chunk_count += knowledge.ingest(text, page.url, kind)
-            page_count += 1
-            pages_by_kind[kind] += 1
+            pages[page.url] = (page, kind)
+
+    for page, kind in pages.values():
+        text = f"{page.title}\nSource: {page.url}\n\n{page.text}"
+        chunk_count += knowledge.ingest(text, page.url, kind, replace_kind=True)
+        page_count += 1
+        pages_by_kind[kind] += 1
 
     if not page_count:
         raise HTTPException(

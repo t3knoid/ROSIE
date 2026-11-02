@@ -23,6 +23,8 @@ class _PageParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self.links: list[str] = []
+        self.content_links: list[str] = []
+        self.navigation_depth = 0
         self.title_parts: list[str] = []
         self.in_title = False
         self.hidden_depth = 0
@@ -34,10 +36,14 @@ class _PageParser(HTMLParser):
             return
         if self.hidden_depth:
             return
+        if tag in {"nav", "header", "footer"}:
+            self.navigation_depth += 1
         if tag == "title":
             self.in_title = True
         if tag == "a" and attributes.get("href"):
             self.links.append(attributes["href"] or "")
+            if not self.navigation_depth:
+                self.content_links.append(attributes["href"] or "")
         if tag in {"p", "br", "div", "li", "h1", "h2", "h3", "tr", "td", "th"}:
             self.parts.append("\n")
 
@@ -47,6 +53,8 @@ class _PageParser(HTMLParser):
             return
         if self.hidden_depth:
             return
+        if tag in {"nav", "header", "footer"} and self.navigation_depth:
+            self.navigation_depth -= 1
         if tag == "title":
             self.in_title = False
         if tag in {"p", "div", "li", "h1", "h2", "h3", "tr"}:
@@ -82,9 +90,10 @@ def crawl_html_source(
     max_pages: int = 100,
     timeout_seconds: float = 15,
     max_page_bytes: int = 2_000_000,
+    runbook_index: bool = False,
     transport: httpx.BaseTransport | None = None,
 ) -> CrawlResult:
-    """Fetch one HTTPS seed and bounded same-origin HTML pages linked from it."""
+    """Crawl HTTPS pages, or only content links directly listed in a runbook index."""
     seed = urlsplit(source_url)
     if seed.scheme != "https" or not seed.hostname or seed.username or seed.password:
         raise ValueError("Web documentation sources must be credential-free HTTPS URLs")
@@ -128,9 +137,12 @@ def crawl_html_source(
                 parser.feed(bytes(body).decode(encoding, errors="replace"))
                 title = " ".join(" ".join(parser.title_parts).split())
                 text = " ".join(" ".join(parser.parts).split())
-                if text:
+                if text and not (runbook_index and url == seed_url):
                     pages.append(WebPage(url=url, title=title, text=text))
-                for href in parser.links:
+                links = parser.content_links if runbook_index and url == seed_url else parser.links
+                if runbook_index and url != seed_url:
+                    links = []
+                for href in links:
                     candidate = _canonical_page_url(urljoin(url, href), origin)
                     if candidate and candidate not in visited and candidate not in queue and len(visited) + len(queue) < max_pages:
                         queue.append(candidate)
