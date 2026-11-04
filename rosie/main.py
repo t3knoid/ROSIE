@@ -9,14 +9,30 @@ from urllib.parse import quote
 from threading import Lock
 from time import perf_counter
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from rosie import audit
 from rosie.config import settings
 from rosie.documents import SUPPORTED_SUFFIXES, load_document
 from rosie.knowledge import KnowledgeBase
-from rosie.models import ChatRequest, ChatResponse, Evidence, PublishRequest, Runbook, RunbookDraftRequest
+from rosie.models import (
+    ChatRequest,
+    ChatResponse,
+    ErrorResponse,
+    Evidence,
+    HealthResponse,
+    IngestResult,
+    LocalIngestResult,
+    PublishRequest,
+    PublishResult,
+    Runbook,
+    RunbookDraftRequest,
+    RunbookGapResult,
+    SourceSyncFailure,
+    SourceSyncResult,
+    SourceSyncStatus,
+)
 from rosie.publisher import GitRepositoryPublisher
 from rosie.rendering import markdown_to_safe_html
 from rosie.runbooks import to_markdown
@@ -55,7 +71,49 @@ async def lifespan(application: FastAPI):
         await task
 
 
-app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+API_DESCRIPTION = """
+ROSIE (Root-cause Observation, SRE Incident Examiner) answers operations questions from
+indexed documentation and runbooks. Version 0.1 is documentation-only: it never connects
+to or changes infrastructure.
+
+**Typical flow**
+
+1. Content is indexed. The configured documentation and runbook sites sync automatically at
+   startup; `POST /api/ingest/sources` re-syncs them, and `POST /api/ingest` or
+   `POST /api/ingest/local` add files.
+2. Poll `GET /api/ingest/sources/status` until `ready` is `true`.
+3. Ask questions with `POST /api/chat`, or retrieve evidence alone with `GET /api/search`.
+4. Draft, export, and publish runbooks with the `/api/runbooks` endpoints.
+
+**Dependencies:** indexing and search need the llama.cpp embedding server and Qdrant;
+chat and runbook drafts also need the llama.cpp chat server. `/api/chat` returns 503 if
+any of them is unreachable, and `/api/runbooks/draft` returns 503 if the chat model fails;
+other endpoints return 500 when a service is down.
+
+**Security:** there is no authentication. Expose this port only on trusted networks.
+Every ingest, search, question, and runbook operation is written to the JSON Lines audit log.
+"""
+
+OPENAPI_TAGS = [
+    {"name": "Health", "description": "Liveness and read-only hardware status."},
+    {
+        "name": "Ingestion",
+        "description": "Add content to the knowledge base. Each passage is stored as a `document` or a `runbook`.",
+    },
+    {"name": "Investigation", "description": "Search indexed content and ask ROSIE questions."},
+    {
+        "name": "Runbooks",
+        "description": "Check runbook coverage, and draft, export, and publish runbooks. Nothing is committed to Git automatically.",
+    },
+]
+
+app = FastAPI(
+    title=settings.app_name,
+    version="0.1.0",
+    description=API_DESCRIPTION,
+    openapi_tags=OPENAPI_TAGS,
+    lifespan=lifespan,
+)
 app.state.source_sync = initial_sync_status()
 source_sync_lock = Lock()
 app.include_router(gpu_router)
@@ -80,16 +138,46 @@ async def index() -> FileResponse:
     return FileResponse(Path(__file__).parent / "static" / "index.html")
 
 
-@app.get("/health")
+@app.get("/health", tags=["Health"], summary="Liveness check", response_model=HealthResponse)
 async def health() -> dict[str, str]:
+    """Report that the API process is running.
+
+    This does not check llama.cpp, Qdrant, or source sync readiness; use
+    `GET /api/ingest/sources/status` for readiness.
+    """
     return {"status": "ok", "service": "rosie"}
 
 
-@app.post("/api/ingest")
+@app.post(
+    "/api/ingest",
+    tags=["Ingestion"],
+    summary="Upload and index one file",
+    response_model=IngestResult,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid `kind`, or the file could not be parsed."},
+        413: {"model": ErrorResponse, "description": "The file is larger than 10 MB."},
+        415: {"model": ErrorResponse, "description": "Unsupported file type."},
+        422: {"model": ErrorResponse, "description": "No text could be extracted from the file."},
+    },
+)
 async def ingest_document(
-    file: UploadFile = File(...),
-    kind: str = Form("document"),
+    file: UploadFile = File(
+        ...,
+        description="Markdown (`.md`, `.markdown`), HTML (`.html`, `.htm`), PDF, DOCX, ODT, or plain text (`.txt`); 10 MB maximum.",
+    ),
+    kind: str = Form(
+        "document",
+        description="Store the content as `document` or `runbook`.",
+        json_schema_extra={"enum": ["document", "runbook"]},
+    ),
 ) -> dict[str, str | int]:
+    """Extract text from an uploaded file, split it into passages, and index them.
+
+    The file is stored under its base file name. Uploading a file with the same name and
+    `kind` replaces the earlier version's passages; unchanged passages are not re-embedded.
+
+    Example: `curl -F "file=@disk-full.md" -F "kind=runbook" http://localhost:8001/api/ingest`
+    """
     filename = Path(file.filename or "").name
     if not filename or Path(filename).suffix.lower() not in SUPPORTED_SUFFIXES:
         raise HTTPException(status_code=415, detail="Upload Markdown, HTML, PDF, DOCX, ODT, or plain text")
@@ -114,8 +202,23 @@ def _ingest_uploaded_document(filename: str, content: bytes, kind: str) -> dict[
     return {"source": filename, "kind": kind, "chunks": count}
 
 
-@app.post("/api/ingest/local")
+@app.post(
+    "/api/ingest/local",
+    tags=["Ingestion"],
+    summary="Index the local knowledge directory",
+    response_model=LocalIngestResult,
+    responses={
+        400: {"model": ErrorResponse, "description": "A file could not be parsed. Indexing stops at that file."},
+        404: {"model": ErrorResponse, "description": "The configured directory does not exist."},
+    },
+)
 def ingest_local_documents() -> dict[str, int]:
+    """Index every supported file under `DOCS_PATH` (`/app/knowledge` in Docker Compose).
+
+    A file is stored as a `runbook` if its name contains "runbook" or it is inside a
+    `runbooks` directory; otherwise it is a `document`. Each file is stored under its path
+    relative to the directory. Files deleted from the directory are not removed from the index.
+    """
     root = Path(settings.docs_path)
     if not root.is_dir():
         raise HTTPException(status_code=404, detail=f"Documentation directory not found: {root}")
@@ -178,13 +281,47 @@ def _ingest_configured_sources() -> dict[str, object]:
     return {"pages": page_count, "chunks": chunk_count, "pages_by_kind": pages_by_kind, "errors": errors}
 
 
-@app.get("/api/ingest/sources/status")
+@app.get(
+    "/api/ingest/sources/status",
+    tags=["Ingestion"],
+    summary="Get source sync status and readiness",
+    response_model=SourceSyncStatus,
+)
 def source_sync_status() -> dict[str, object]:
+    """Report whether ROSIE is ready to answer questions, and the state of the latest sync.
+
+    `ready` becomes `true` after the first sync that finishes with no errors and then stays
+    `true` until the API restarts. The status is held in memory and resets on restart.
+    """
     return app.state.source_sync
 
 
-@app.post("/api/ingest/sources")
+@app.post(
+    "/api/ingest/sources",
+    tags=["Ingestion"],
+    summary="Sync the configured documentation and runbook sites",
+    response_model=SourceSyncResult,
+    responses={
+        409: {"model": ErrorResponse, "description": "A sync is already running."},
+        502: {"model": SourceSyncFailure, "description": "No pages could be fetched from either source."},
+    },
+)
 def ingest_configured_sources() -> dict[str, object]:
+    """Fetch and index pages from `DOCUMENTATION_SOURCE_URL` and `RUNBOOK_SOURCE_URL`.
+
+    - **Documentation:** crawled recursively from the start page.
+    - **Runbooks:** only pages linked directly from the runbook index's main content
+      (not its header, navigation, or footer). The index page itself is not indexed.
+    - Only same-origin HTTPS pages whose paths end in `.html` or `.htm` (or are `/`) are followed.
+      Redirects are not followed. Each source is limited to `WEB_SOURCE_MAX_PAGES` pages and each
+      page to `WEB_SOURCE_MAX_PAGE_BYTES`.
+    - A URL found by both crawls is stored once, as a runbook.
+    - Unchanged pages are not re-embedded. Pages no longer reachable are left in the index.
+
+    The request blocks until the sync finishes, which can take several minutes. A 200 response
+    with a non-empty `errors` list is a partial failure: the pages listed were skipped and
+    `ready` is not set.
+    """
     if not source_sync_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="Source sync is already running")
     previous = app.state.source_sync
@@ -208,8 +345,27 @@ def ingest_configured_sources() -> dict[str, object]:
         source_sync_lock.release()
 
 
-@app.get("/api/search")
-def search_documents(q: str, kind: str | None = None, limit: int = 5) -> list[Evidence]:
+@app.get(
+    "/api/search",
+    tags=["Investigation"],
+    summary="Search indexed content",
+    response_model=list[Evidence],
+    responses={400: {"model": ErrorResponse, "description": "Invalid `kind` or `limit`."}},
+)
+def search_documents(
+    q: str = Query(description="Text to search for. Matching is by meaning, not exact words.", examples=["disk full"]),
+    kind: str | None = Query(
+        None,
+        description="Return only `document` or only `runbook` passages. Omit to search both.",
+        json_schema_extra={"enum": ["document", "runbook"]},
+    ),
+    limit: int = Query(5, description="Maximum number of passages to return, from 1 to 20."),
+) -> list[Evidence]:
+    """Return the passages most similar to the query, best match first.
+
+    Only passages scoring at least `RELEVANCE_THRESHOLD` are returned, so the list can be
+    empty. This does not call the chat model.
+    """
     if kind not in {None, "document", "runbook"}:
         raise HTTPException(status_code=400, detail="kind must be 'document' or 'runbook'")
     if not 1 <= limit <= 20:
@@ -219,8 +375,23 @@ def search_documents(q: str, kind: str | None = None, limit: int = 5) -> list[Ev
     return [Evidence(source=str(item["source"]), kind=str(item["kind"]), text=str(item["text"]), score=float(item["score"])) for item in results]
 
 
-@app.post("/api/chat", response_model=ChatResponse)
+@app.post(
+    "/api/chat",
+    tags=["Investigation"],
+    summary="Ask ROSIE a question",
+    response_model=ChatResponse,
+    responses={503: {"model": ErrorResponse, "description": "Sources have not finished syncing, or llama.cpp or Qdrant could not be reached."}},
+)
 def chat(request: ChatRequest) -> ChatResponse:
+    """Investigate a question using indexed documentation and runbooks.
+
+    ROSIE retrieves the best-matching passages (`CHAT_EVIDENCE_LIMIT`, default 2), checks
+    whether any runbook matches, and asks the chat model for an answer based on that
+    evidence. Each call is independent; earlier questions are not remembered.
+
+    Returns 503 until `GET /api/ingest/sources/status` reports `ready`. Answers usually take
+    several seconds to a few minutes depending on the GPU.
+    """
     if not app.state.source_sync["ready"]:
         raise HTTPException(status_code=503, detail="Sources must finish syncing before investigating")
     started_at = perf_counter()
@@ -246,8 +417,20 @@ def chat(request: ChatRequest) -> ChatResponse:
     )
 
 
-@app.get("/api/runbooks/gap")
-def identify_runbook_gap(q: str) -> dict[str, bool | str | list[Evidence]]:
+@app.get(
+    "/api/runbooks/gap",
+    tags=["Runbooks"],
+    summary="Check whether a runbook covers a topic",
+    response_model=RunbookGapResult,
+)
+def identify_runbook_gap(
+    q: str = Query(description="The incident or task to look for a runbook about.", examples=["certificate expired"]),
+) -> dict[str, bool | str | list[Evidence]]:
+    """Search only runbook passages and report a gap if none match.
+
+    A match means a runbook is related, not that it fully covers the topic; review the
+    returned evidence. This does not call the chat model.
+    """
     results = get_knowledge_base().search(q, kind="runbook", limit=3)
     evidence = [
         Evidence(source=str(item["source"]), kind=str(item["kind"]), text=str(item["text"]), score=float(item["score"]))
@@ -259,8 +442,19 @@ def identify_runbook_gap(q: str) -> dict[str, bool | str | list[Evidence]]:
     return {"gap": gap, "assessment": assessment, "evidence": evidence}
 
 
-@app.post("/api/runbooks/draft", response_model=Runbook)
+@app.post(
+    "/api/runbooks/draft",
+    tags=["Runbooks"],
+    summary="Draft a runbook for an incident",
+    response_model=Runbook,
+    responses={503: {"model": ErrorResponse, "description": "The chat model could not produce a valid runbook."}},
+)
 def create_runbook_draft(request: RunbookDraftRequest) -> Runbook:
+    """Generate a structured runbook draft from the incident description and up to 6 matching passages.
+
+    The draft is returned only; nothing is saved. Review and edit it, then pass it to
+    `POST /api/runbooks/export` or `POST /api/runbooks/publish`. Generation can take minutes.
+    """
     evidence = get_knowledge_base().search(request.incident, limit=6)
     try:
         runbook = draft_runbook(request.incident, evidence)
@@ -270,8 +464,18 @@ def create_runbook_draft(request: RunbookDraftRequest) -> Runbook:
     return runbook
 
 
-@app.post("/api/runbooks/export", response_class=PlainTextResponse)
+@app.post(
+    "/api/runbooks/export",
+    tags=["Runbooks"],
+    summary="Export a runbook as Markdown",
+    response_class=PlainTextResponse,
+    responses={200: {"description": "The runbook as a Markdown file download.", "content": {"text/plain": {}}}},
+)
 def export_runbook(runbook: Runbook) -> PlainTextResponse:
+    """Render a runbook as Markdown and return it as a file download named after its title.
+
+    Each section becomes a `##` heading; empty sections read "Not specified". Nothing is saved.
+    """
     audit.record("runbook_exported", {"title": runbook.title})
     return PlainTextResponse(
         to_markdown(runbook),
@@ -286,8 +490,19 @@ def _markdown_attachment_header(title: str) -> str:
     return f"attachment; filename=\"{fallback}.md\"; filename*=UTF-8''{quote(name + '.md', safe='')}"
 
 
-@app.post("/api/runbooks/publish")
+@app.post(
+    "/api/runbooks/publish",
+    tags=["Runbooks"],
+    summary="Save a runbook to the publish repository",
+    response_model=PublishResult,
+    responses={400: {"model": ErrorResponse, "description": "The path is invalid, escapes the repository, or the file already exists."}},
+)
 def publish_runbook(request: PublishRequest) -> dict[str, str]:
+    """Write the runbook as a new Markdown file under `REPOSITORY_PATH`.
+
+    Existing files are never overwritten. The file is not committed: review it and commit
+    it with Git yourself. Published runbooks are not indexed automatically.
+    """
     try:
         path = get_publisher().create(request.path, request.runbook)
     except (ValueError, FileExistsError) as error:

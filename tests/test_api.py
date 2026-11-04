@@ -12,6 +12,11 @@ def ready_sources(monkeypatch):
     monkeypatch.setitem(main.app.state._state, "source_sync", {**main.initial_sync_status(), "ready": True})
 
 
+def sync_result(pages: int, errors: list[str]) -> dict[str, object]:
+    """A source sync result in the shape `_ingest_configured_sources` returns."""
+    return {"pages": pages, "chunks": pages, "pages_by_kind": {"document": pages, "runbook": 0}, "errors": errors}
+
+
 class FakeKnowledgeBase:
     def __init__(self) -> None:
         self.ingested: list[tuple[str, str, str]] = []
@@ -201,7 +206,7 @@ def test_source_sync_counts_overlapping_pages_once_with_runbook_priority(monkeyp
 
 def test_chat_is_blocked_until_server_sync_succeeds(monkeypatch):
     main.app.state.source_sync = main.initial_sync_status()
-    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: {"pages": 2, "errors": []})
+    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: sync_result(2, []))
     monkeypatch.setattr(main, "get_investigation_graph", lambda: FakeGraph())
     monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
     client = TestClient(main.app)
@@ -218,7 +223,7 @@ def test_startup_runs_source_sync_and_resets_readiness(monkeypatch):
 
     def ingest():
         calls.append(main.app.state.source_sync["ready"])
-        return {"pages": 2, "errors": []}
+        return sync_result(2, [])
 
     monkeypatch.setattr(main, "_ingest_configured_sources", ingest)
 
@@ -237,7 +242,7 @@ def test_failed_initial_sync_stays_locked_and_can_be_retried(monkeypatch, partia
 
     def ingest():
         if partial:
-            return {"pages": 1, "errors": ["Page unavailable"]}
+            return sync_result(1, ["Page unavailable"])
         raise main.HTTPException(status_code=502, detail="Source unavailable")
 
     monkeypatch.setattr(main, "_ingest_configured_sources", ingest)
@@ -245,7 +250,7 @@ def test_failed_initial_sync_stays_locked_and_can_be_retried(monkeypatch, partia
     client.post("/api/ingest/sources")
     status = client.get("/api/ingest/sources/status").json()
     assert not status["ready"] and not status["syncing"] and status["error"]
-    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: {"pages": 2, "errors": []})
+    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: sync_result(2, []))
     assert client.post("/api/ingest/sources").status_code == 200
     assert client.get("/api/ingest/sources/status").json()["ready"]
 
@@ -272,7 +277,7 @@ def test_failed_startup_keeps_app_available_but_prompt_locked(monkeypatch):
 
 
 def test_failed_refresh_does_not_discard_initial_readiness(monkeypatch):
-    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: {"pages": 1, "errors": ["Unavailable"]})
+    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: sync_result(1, ["Unavailable"]))
     client = TestClient(main.app)
     assert client.post("/api/ingest/sources").status_code == 200
     assert client.get("/api/ingest/sources/status").json()["ready"]
@@ -283,7 +288,7 @@ def test_startup_retries_until_initial_sync_succeeds(monkeypatch):
 
     def ingest():
         calls.append(True)
-        return {"pages": 1, "errors": ["Not ready"] if len(calls) == 1 else []}
+        return sync_result(1, ["Not ready"] if len(calls) == 1 else [])
 
     async def skip_retry_delay(awaitable, timeout):
         awaitable.close()
@@ -318,3 +323,17 @@ def test_ingest_rejects_upload_without_text(monkeypatch) -> None:
     client = TestClient(main.app)
     response = client.post("/api/ingest", files={"file": ("empty.md", b"   \n")})
     assert response.status_code == 422
+
+
+def test_every_endpoint_is_documented_in_openapi() -> None:
+    schema = main.app.openapi()
+    assert schema["info"]["description"]
+    for path, operations in schema["paths"].items():
+        for method, operation in operations.items():
+            name = f"{method.upper()} {path}"
+            assert operation.get("summary"), f"{name} has no summary"
+            assert operation.get("description"), f"{name} has no description"
+            assert operation.get("tags"), f"{name} has no tag"
+            content = operation["responses"]["200"].get("content", {})
+            schemas = [media.get("schema", {}) for media in content.values()]
+            assert any(schemas) or "text/plain" in content, f"{name} has an untyped 200 response"
