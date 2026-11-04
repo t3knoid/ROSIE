@@ -80,6 +80,8 @@ def test_runbook_index_excludes_navigation_index_and_recursive_links() -> None:
 
     assert requested == ["/runbooks.html", "/recovery.html"]
     assert [page.url for page in result.pages] == ["https://homelab.test/recovery.html"]
+    assert result.index_page is not None and result.index_page.url == "https://homelab.test/runbooks.html"
+    assert result.index_link_count == 1
     assert not result.errors
 
 

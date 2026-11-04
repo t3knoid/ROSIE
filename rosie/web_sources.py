@@ -19,6 +19,10 @@ class WebPage:
 class CrawlResult:
     pages: list[WebPage]
     errors: list[str]
+    index_page: WebPage | None = None
+    """For a runbook crawl, the index page itself. It is not a runbook, so it is kept apart."""
+    index_link_count: int = 0
+    """For a runbook crawl, how many distinct pages the index links to."""
 
 
 class _PageParser(HtmlSectionParser):
@@ -80,6 +84,8 @@ def crawl_html_source(
     visited: set[str] = set()
     pages: list[WebPage] = []
     errors: list[str] = []
+    index_page: WebPage | None = None
+    index_links: set[str] = set()
     headers = {"User-Agent": "ROSIE/0.1 documentation indexer"}
 
     with httpx.Client(
@@ -108,16 +114,21 @@ def crawl_html_source(
                 parser = _PageParser()
                 parser.feed(bytes(body).decode(encoding, errors="replace"))
                 text = parser.text
-                if text and not (runbook_index and url == seed_url):
-                    pages.append(WebPage(url=url, title=parser.title, text=text, sections=tuple(parser.sections)))
+                page = WebPage(url=url, title=parser.title, text=text, sections=tuple(parser.sections)) if text else None
+                if runbook_index and url == seed_url:
+                    index_page = page
+                elif page:
+                    pages.append(page)
                 links = parser.content_links if runbook_index and url == seed_url else parser.links
                 if runbook_index and url != seed_url:
                     links = []
                 for href in links:
                     candidate = _canonical_page_url(urljoin(url, href), origin)
+                    if runbook_index and url == seed_url and candidate and candidate != seed_url:
+                        index_links.add(candidate)
                     if candidate and candidate not in visited and candidate not in queue and len(visited) + len(queue) < max_pages:
                         queue.append(candidate)
             except (httpx.HTTPError, UnicodeError, ValueError) as error:
                 errors.append(f"{url}: {error}")
 
-    return CrawlResult(pages=pages, errors=errors)
+    return CrawlResult(pages=pages, errors=errors, index_page=index_page, index_link_count=len(index_links))

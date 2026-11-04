@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from rosie import audit
 from rosie.config import settings
-from rosie.documents import SUPPORTED_SUFFIXES, document_passages, passages
+from rosie.documents import SUPPORTED_SUFFIXES, document_passages, passages, runbook_index_passage
 from rosie.knowledge import KnowledgeBase
 from rosie.models import (
     ChatRequest,
@@ -246,6 +246,8 @@ def _ingest_configured_sources() -> dict[str, object]:
     errors: list[str] = []
     knowledge = get_knowledge_base()
     pages: dict[str, tuple[WebPage, str]] = {}
+    index: WebPage | None = None
+    index_summary = ""
 
     for source_url, kind in sources:
         try:
@@ -262,10 +264,19 @@ def _ingest_configured_sources() -> dict[str, object]:
         errors.extend(result.errors)
         for page in result.pages:
             pages[page.url] = (page, kind)
+        if result.index_page:
+            # The runbook index is a list of runbooks, not a runbook. Store it as a document,
+            # led by a passage saying what the page is.
+            index = result.index_page
+            pages[index.url] = (index, "document")
+            index_summary = runbook_index_passage(index.title, index.url, list(index.sections), result.index_link_count)
 
     for page, kind in pages.values():
         sections = list(page.sections) or [((), page.text)]
-        chunk_count += knowledge.ingest(passages(page.title, sections), page.url, kind, replace_kind=True)
+        page_passages = passages(page.title, sections)
+        if index and page is index:
+            page_passages.insert(0, index_summary)
+        chunk_count += knowledge.ingest(page_passages, page.url, kind, replace_kind=True)
         page_count += 1
         pages_by_kind[kind] += 1
     # Earlier versions indexed a site's /index.html separately from its root page.
@@ -389,9 +400,9 @@ def search_documents(
 def chat(request: ChatRequest) -> ChatResponse:
     """Investigate a question using indexed documentation and runbooks.
 
-    ROSIE retrieves the best-matching passages (`CHAT_EVIDENCE_LIMIT`, default 2), checks
-    whether any runbook matches, and asks the chat model for an answer based on that
-    evidence. Each call is independent; earlier questions are not remembered.
+    ROSIE retrieves the best-matching passages (`CHAT_EVIDENCE_LIMIT`, default 2), adds the
+    best-matching runbook passage if one matches and is not already included, and asks the
+    chat model for an answer based on that evidence. Each call is independent; earlier questions are not remembered.
 
     Returns 503 until `GET /api/ingest/sources/status` reports `ready`. Answers usually take
     several seconds to a few minutes depending on the GPU.

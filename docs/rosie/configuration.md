@@ -76,7 +76,7 @@ Then re-run `POST /api/ingest/local` or re-upload any files that were not from t
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `CHAT_EVIDENCE_LIMIT` | `2` | Passages given to the chat model per question. More passages give more context but slow down answers. |
+| `CHAT_EVIDENCE_LIMIT` | `2` | Passages given to the chat model per question, plus the best-matching runbook passage when it is not already among them. More passages give more context but slow down answers. |
 | `CHAT_MAX_OUTPUT_TOKENS` | `512` | Maximum answer length in tokens. Raise it if answers are cut off. Runbook drafts are not limited by this. |
 | `RELEVANCE_THRESHOLD` | `0.35` | Minimum similarity (0 to 1) for a passage to count as evidence. Raise it to drop weak matches; lower it if relevant passages are missed. Also decides whether a runbook gap is reported. |
 | `QDRANT_COLLECTION` | `rosie_documents` | Qdrant collection that stores passages. |

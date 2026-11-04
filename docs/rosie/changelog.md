@@ -34,6 +34,9 @@
 - Site navigation, headers, and footers are no longer indexed as page content.
 - The site root's `/index.html` is no longer indexed separately from `/`; duplicates left by earlier versions are removed at the next sync.
 - The system prompt tells the model that evidence passages are excerpts, so it no longer claims a page lacks information the excerpt does not show.
+- When a runbook matches the question, its passage is included in the evidence and the model is told its URL, so answers name the runbook and it appears under **Evidence consulted**. Previously, the model was told only that a runbook matched, not which one.
+- The runbook index page is indexed as a document, led by a passage saying it is the list of runbooks, with its runbook count and categories. Previously, the page was indexed only by the documentation crawl, and none of its passages said what the page was, so ROSIE answered that no list of runbooks existed.
+- Table cells are separated when pages are indexed, so a row reads "Deploy Plex: Step-by-step instructions…" instead of running the cells together.
 - Passages no longer start in the middle of a word. Previously, the overlap between passages could cut names such as `deploy_truenas_vms.yml` to `enas_vms.yml`, and answers repeated the fragment.
 
 ## 0.1.0 - Initial MVP

@@ -42,6 +42,7 @@ class HtmlSectionParser(HTMLParser):
         self._heading_parts: list[str] = []
         self._path: list[tuple[int, str]] = []
         self._sections: list[tuple[tuple[str, ...], list[str]]] = [((), [])]
+        self._row_cells = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in _HIDDEN_TAGS:
@@ -57,6 +58,13 @@ class HtmlSectionParser(HTMLParser):
             self._content_depth += 1
         if tag == "title":
             self._in_title = True
+        if tag == "tr":
+            self._row_cells = 0
+        elif tag in {"td", "th"} and not self.chrome_depth and self._heading_level is None:
+            # Separate cells so a table row reads "Name: description" rather than running together.
+            if self._row_cells:
+                self._append_separator(":")
+            self._row_cells += 1
         if tag in _HEADING_LEVELS and not self.chrome_depth:
             self._heading_level = _HEADING_LEVELS[tag]
             self._heading_parts = []
@@ -76,6 +84,8 @@ class HtmlSectionParser(HTMLParser):
             self._content_depth -= 1
         if tag == "title":
             self._in_title = False
+        if tag == "tr" and self._row_cells and not self.chrome_depth:
+            self._append_separator(";")
         if tag in _HEADING_LEVELS and self._heading_level is not None:
             self._start_section()
         elif tag in _BLOCK_TAGS:
@@ -93,6 +103,16 @@ class HtmlSectionParser(HTMLParser):
             self._heading_parts.append(data)
         else:
             self._sections[-1][1].append(data)
+
+    def _append_separator(self, mark: str) -> None:
+        """Attach punctuation to the preceding text, without the block spacing before it."""
+        parts = self._sections[-1][1]
+        while parts and not parts[-1].strip():
+            parts.pop()
+        if parts:
+            if not parts[-1].rstrip().endswith((":", ";")):
+                parts[-1] = parts[-1].rstrip() + mark
+            parts.append(" ")
 
     def _start_section(self) -> None:
         level, name = self._heading_level, _normalize(self._heading_parts)
@@ -194,6 +214,24 @@ def passages(title: str, sections: list[Section], size: int = 1200, overlap: int
         for piece in chunks(body, size=max(size - len(prefix), size // 2), overlap=overlap):
             result.append(prefix + piece)
     return result
+
+
+def runbook_index_passage(title: str, url: str, sections: list[Section], runbook_count: int) -> str:
+    """Describe a runbook index page as a whole, so questions about the list itself find it.
+
+    The index's own passages each hold one category of runbook links; none of them says that
+    the page is the list of runbooks.
+    """
+    categories = list(dict.fromkeys(
+        heading[0 if len(heading) == 1 else 1]
+        for heading, _ in sections
+        if heading and section_label(title, heading) != section_label(title, ())
+    ))
+    label = section_label(title, ()) or "Runbook index"
+    text = f"{label}: This page, {url}, is the runbook index. It lists all {runbook_count} runbooks"
+    if categories:
+        text += f", grouped by category: {'; '.join(categories)}"
+    return text + ". Open it to see every runbook with a short description."
 
 
 def document_passages(name: str, data: bytes) -> list[str]:

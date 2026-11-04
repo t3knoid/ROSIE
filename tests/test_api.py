@@ -360,3 +360,32 @@ def test_prompt_explains_that_questions_are_independent() -> None:
     assert 'id="prompt-hint"' in page
     assert "ROSIE does not see earlier questions or answers" in page
     assert page.index('id="question-form"') < page.index('id="prompt-hint"') < page.index('id="sync-sources"')
+
+
+def test_source_sync_stores_runbook_index_as_document_led_by_a_summary(monkeypatch) -> None:
+    knowledge = FakeKnowledgeBase()
+    index = WebPage(
+        url="https://homelab.test/runbooks.html", title="Runbooks", text="Recovery: Restore service.",
+        sections=((("Runbooks", "Recovery tasks"), "Recovery: Restore service."),),
+    )
+    runbook = WebPage(url="https://homelab.test/recovery.html", title="Recovery", text="Check logs.")
+
+    def fake_crawl(url: str, **kwargs) -> CrawlResult:
+        if kwargs["runbook_index"]:
+            return CrawlResult(pages=[runbook], errors=[], index_page=index, index_link_count=1)
+        return CrawlResult(pages=[index], errors=[])
+
+    monkeypatch.setattr(main, "get_knowledge_base", lambda: knowledge)
+    monkeypatch.setattr(main, "crawl_html_source", fake_crawl)
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+
+    result = TestClient(main.app).post("/api/ingest/sources").json()
+
+    assert result["pages_by_kind"] == {"document": 1, "runbook": 1}
+    stored = {source: (content, kind) for content, source, kind in knowledge.ingested}
+    content, kind = stored[index.url]
+    assert kind == "document"
+    assert content[0].startswith(f"Runbooks: This page, {index.url}, is the runbook index. It lists all 1 runbooks")
+    assert "grouped by category: Recovery tasks" in content[0]
+    assert content[1] == "Runbooks › Recovery tasks: Recovery: Restore service."
+    assert stored[runbook.url][1] == "runbook"

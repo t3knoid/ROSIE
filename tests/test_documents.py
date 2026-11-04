@@ -121,3 +121,23 @@ def test_short_subsections_merge_into_their_parent_but_topics_stay_separate() ->
         "Reverse Proxy › Certificates: Certbot renews.",
     ]
     assert result[3].startswith("Reverse Proxy › Certificates › Renewal: x x")
+
+
+def test_table_rows_keep_cells_apart() -> None:
+    from rosie.documents import HtmlSectionParser
+
+    parser = HtmlSectionParser()
+    parser.feed("<table><tr><th>Runbook</th><th>Description</th></tr>"
+                "<tr><td><a href='a.html'>Deploy <b>Plex</b></a></td><td></td><td>Install Plex.</td></tr></table><p>After.</p>")
+    assert parser.text == "Runbook: Description; Deploy Plex: Install Plex.; After."
+
+
+def test_runbook_index_passage_names_the_page_and_its_categories() -> None:
+    from rosie.documents import runbook_index_passage
+
+    sections = [((), "Intro."), (("📘 Runbooks",), "All runbooks."), (("📘 Runbooks", "🌐 DNS"), "Pi-hole."), (("📘 Runbooks", "🎬 Media"), "Plex.")]
+    text = runbook_index_passage("Runbooks", "https://homelab.test/runbooks.html", sections, 12)
+    assert text == (
+        "Runbooks: This page, https://homelab.test/runbooks.html, is the runbook index. It lists all 12 runbooks, "
+        "grouped by category: 🌐 DNS; 🎬 Media. Open it to see every runbook with a short description."
+    )

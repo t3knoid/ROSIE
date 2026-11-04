@@ -41,7 +41,7 @@ Settings for all of these are described in [configuration](configuration.md).
 
 **Source sync.** At startup, on request, and on the optional timer, the app crawls the configured documentation site and runbook index (same-origin HTTPS HTML only, with page and size limits) and indexes the pages. Chat is unavailable until one sync finishes without errors. Readiness and the sync lock are held in the app process, so the app must run as a single Uvicorn worker.
 
-**Investigation.** For each question, the app retrieves the best-matching passages and checks separately for a matching runbook. It sends the system prompt, the evidence (grouped by source), and the question to `llama-chat`, then renders the Markdown answer to sanitized HTML. Each question is independent; there is no conversation memory.
+**Investigation.** For each question, the app retrieves the best-matching passages and searches runbooks separately; the best runbook passage is added to the evidence if it is not already there, and the model is told which runbook it is. It sends the system prompt, the evidence (grouped by source), and the question to `llama-chat`, then renders the Markdown answer to sanitized HTML. Each question is independent; there is no conversation memory.
 
 **Runbooks.** Drafts are generated as structured data, rendered to Markdown only by the exporter, and written by the publisher as new files. See [runbooks](runbooks.md).
 

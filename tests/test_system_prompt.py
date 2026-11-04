@@ -75,6 +75,41 @@ def test_investigation_groups_legacy_duplicate_sources_and_preserves_distinct_pa
     assert result["runbook_gap"] is False
 
 
+def test_investigation_includes_and_names_the_matching_runbook() -> None:
+    runbook_url = "https://homelab.refol.us/configure_an_inventory_host_web_service_for_a_reverse_proxy.html"
+    document = {"source": "https://homelab.refol.us/nginx.html", "kind": "document", "text": "Nginx overview.", "score": 0.8}
+    runbook = {"source": runbook_url, "kind": "runbook", "text": "Add the host to the proxy inventory.", "score": 0.7}
+
+    class RunbookKnowledgeBase:
+        def search(self, query, kind=None, limit=5):
+            return [runbook] if kind == "runbook" else [document]
+
+    llm = FakeLLM()
+    result = build_investigation_graph(RunbookKnowledgeBase(), llm).invoke({"question": "Reverse proxy setup"})
+    context = llm.messages[1].content
+
+    assert result["evidence"] == [document, runbook]
+    assert result["runbook_gap"] is False
+    assert f"Source: {runbook_url} (runbook)" in context
+    assert "Add the host to the proxy inventory." in context
+    assert f"best-matching indexed runbook is {runbook_url}" in context
+
+
+def test_investigation_reports_runbook_gap_without_adding_evidence() -> None:
+    document = {"source": "notes.md", "kind": "document", "text": "Notes.", "score": 0.8}
+
+    class NoRunbookKnowledgeBase:
+        def search(self, query, kind=None, limit=5):
+            return [] if kind == "runbook" else [document]
+
+    llm = FakeLLM()
+    result = build_investigation_graph(NoRunbookKnowledgeBase(), llm).invoke({"question": "Anything"})
+
+    assert result["evidence"] == [document]
+    assert result["runbook_gap"] is True
+    assert "no matching indexed runbook was found." in llm.messages[1].content
+
+
 def test_evidence_context_keeps_same_text_from_independent_sources() -> None:
     context = _evidence_context([
         {"source": "first.md", "kind": "document", "text": "Check logs."},
