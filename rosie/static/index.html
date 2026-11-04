@@ -58,7 +58,7 @@
       <h1>What needs investigating?</h1>
       <p class="intro">Ask about an incident. ROSIE will check your indexed documentation and show its sources.</p>
       <div id="thread" aria-live="polite"></div>
-      <form id="question-form"><textarea id="question" placeholder="Describe the symptom or error..." required maxlength="4000" aria-label="Incident question" disabled></textarea><button id="ask" type="submit" disabled>Investigate</button></form>
+      <form id="question-form"><textarea id="question" placeholder="Describe the symptom or error... (Enter to send, Shift+Enter for a new line)" required maxlength="4000" aria-keyshortcuts="Enter" aria-label="Incident question" disabled></textarea><button id="ask" type="submit" disabled>Investigate</button></form>
       <div class="source-sync">
         <a id="sync-sources" href="#sync-status" aria-controls="sync-status">Sync sources</a>
         <p id="sync-status" role="status" aria-live="polite">Checking source sync...</p>
@@ -89,6 +89,13 @@
       askButton.disabled = !sourcesReady || isInvestigating || !input.value.trim();
     };
     input.addEventListener('input', updateInvestigateState);
+    // Enter sends the prompt; Shift+Enter inserts a new line. Ignore Enter while an
+    // input method is composing text, so confirming a character does not send.
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+      event.preventDefault();
+      if (!askButton.disabled) form.requestSubmit(askButton);
+    });
 
     const refreshSourceStatus = async () => {
       try {

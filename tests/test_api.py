@@ -337,3 +337,11 @@ def test_every_endpoint_is_documented_in_openapi() -> None:
             content = operation["responses"]["200"].get("content", {})
             schemas = [media.get("schema", {}) for media in content.values()]
             assert any(schemas) or "text/plain" in content, f"{name} has an untyped 200 response"
+
+
+def test_enter_sends_prompt_and_shift_enter_adds_line() -> None:
+    page = TestClient(main.app).get("/").text
+    assert "input.addEventListener('keydown'" in page
+    assert "event.shiftKey || event.isComposing" in page
+    assert "form.requestSubmit(askButton)" in page
+    assert "Shift+Enter for a new line" in page
