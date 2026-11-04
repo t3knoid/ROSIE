@@ -498,7 +498,10 @@ def _markdown_attachment_header(title: str) -> str:
     responses={400: {"model": ErrorResponse, "description": "The path is invalid, escapes the repository, or the file already exists."}},
 )
 def publish_runbook(request: PublishRequest) -> dict[str, str]:
-    """Write the runbook as a new Markdown file under `REPOSITORY_PATH`.
+    """Write the runbook as a new Markdown file in the publish directory.
+
+    In Docker Compose this is the host directory set by `RUNBOOK_PUBLISH_PATH` (default
+    `./docs/rosie/generated-runbooks`); `path` is relative to it.
 
     Existing files are never overwritten. The file is not committed: review it and commit
     it with Git yourself. Published runbooks are not indexed automatically.

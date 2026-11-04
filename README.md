@@ -84,7 +84,7 @@ For local development, ROSIE defaults to llama.cpp chat at `http://localhost:808
 - `GET /api/runbooks/gap?q=...`: check for a matching runbook
 - `POST /api/runbooks/draft`: generate a canonical runbook draft
 - `POST /api/runbooks/export`: render a runbook as Markdown
-- `POST /api/runbooks/publish`: write a new Markdown draft under the configured repository path; review and commit with Git yourself
+- `POST /api/runbooks/publish`: write a new Markdown draft under `RUNBOOK_PUBLISH_PATH` on the host (default `./docs/rosie/generated-runbooks`); review and commit with Git yourself
 
 ## Tests
 
