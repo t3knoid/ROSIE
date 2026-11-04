@@ -93,3 +93,20 @@ def test_empty_runbook_index_does_not_count_as_a_runbook() -> None:
     )
     assert result.pages == []
     assert result.errors == []
+
+def test_root_index_page_is_the_same_page_as_root_and_chrome_is_not_indexed() -> None:
+    requested: list[str] = []
+    bodies = {
+        "/": '<nav><a href="/index.html">Home</a></nav><main><h1>Home</h1><p>Overview.</p><a href="/index.html">Again</a></main>',
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(request.url.path)
+        return httpx.Response(200, headers={"content-type": "text/html"}, text=bodies[request.url.path])
+
+    result = crawl_html_source("https://homelab.test/index.html", transport=httpx.MockTransport(handler))
+
+    assert requested == ["/"]
+    assert [page.url for page in result.pages] == ["https://homelab.test/"]
+    assert result.pages[0].sections == ((("Home",), "Overview. Again"),)
+    assert "Home Overview" in result.pages[0].text

@@ -111,3 +111,8 @@ def test_runbook_draft_groups_evidence_without_changing_canonical_output(monkeyp
     assert context.count("Source: radarr.html") == 1
     assert context.count("Check logs.") == 1
     assert "(document, runbook)" in context
+
+
+def test_prompt_says_evidence_is_excerpts() -> None:
+    prompt = load_system_prompt()
+    assert "never claim a document lacks something because an excerpt does not show it" in prompt

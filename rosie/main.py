@@ -5,7 +5,7 @@ from functools import lru_cache
 import logging
 from pathlib import Path
 import re
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from threading import Lock
 from time import perf_counter
 
@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from rosie import audit
 from rosie.config import settings
-from rosie.documents import SUPPORTED_SUFFIXES, load_document
+from rosie.documents import SUPPORTED_SUFFIXES, document_passages, passages
 from rosie.knowledge import KnowledgeBase
 from rosie.models import (
     ChatRequest,
@@ -192,12 +192,12 @@ async def ingest_document(
 
 def _ingest_uploaded_document(filename: str, content: bytes, kind: str) -> dict[str, str | int]:
     try:
-        text = load_document(filename, content)
+        document = document_passages(filename, content)
     except (ValueError, UnicodeDecodeError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    if not text.strip():
+    if not document:
         raise HTTPException(status_code=422, detail="No text could be extracted from the document")
-    count = get_knowledge_base().ingest(text, filename, kind)
+    count = get_knowledge_base().ingest(document, filename, kind)
     audit.record("document_ingested", {"source": filename, "kind": kind, "chunks": count})
     return {"source": filename, "kind": kind, "chunks": count}
 
@@ -226,11 +226,11 @@ def ingest_local_documents() -> dict[str, int]:
     total = 0
     for path in documents:
         try:
-            text = load_document(path.name, path.read_bytes())
+            document = document_passages(path.name, path.read_bytes())
         except (ValueError, UnicodeDecodeError) as error:
             raise HTTPException(status_code=400, detail=f"Could not read {path}: {error}") from error
         kind = "runbook" if "runbook" in path.name.casefold() or "runbooks" in path.parts else "document"
-        total += get_knowledge_base().ingest(text, str(path.relative_to(root)), kind)
+        total += get_knowledge_base().ingest(document, str(path.relative_to(root)), kind)
     audit.record("local_documents_ingested", {"directory": str(root), "files": len(documents), "chunks": total})
     return {"files": len(documents), "chunks": total}
 
@@ -264,10 +264,14 @@ def _ingest_configured_sources() -> dict[str, object]:
             pages[page.url] = (page, kind)
 
     for page, kind in pages.values():
-        text = f"{page.title}\nSource: {page.url}\n\n{page.text}"
-        chunk_count += knowledge.ingest(text, page.url, kind, replace_kind=True)
+        sections = list(page.sections) or [((), page.text)]
+        chunk_count += knowledge.ingest(passages(page.title, sections), page.url, kind, replace_kind=True)
         page_count += 1
         pages_by_kind[kind] += 1
+    # Earlier versions indexed a site's /index.html separately from its root page.
+    knowledge.delete_sources([
+        url + alias for url in pages if urlsplit(url).path == "/" for alias in ("index.html", "index.htm")
+    ])
 
     if not page_count:
         raise HTTPException(

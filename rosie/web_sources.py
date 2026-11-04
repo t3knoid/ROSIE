@@ -4,12 +4,15 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
+from rosie.documents import HtmlSectionParser, Section
+
 
 @dataclass(frozen=True)
 class WebPage:
     url: str
     title: str
     text: str
+    sections: tuple[Section, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -18,54 +21,21 @@ class CrawlResult:
     errors: list[str]
 
 
-class _PageParser(HTMLParser):
+class _PageParser(HtmlSectionParser):
+    """Section parser that also collects links, noting which are outside site navigation."""
+
     def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.parts: list[str] = []
+        super().__init__()
         self.links: list[str] = []
         self.content_links: list[str] = []
-        self.navigation_depth = 0
-        self.title_parts: list[str] = []
-        self.in_title = False
-        self.hidden_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        attributes = dict(attrs)
-        if tag in {"script", "style", "noscript", "svg"}:
-            self.hidden_depth += 1
-            return
-        if self.hidden_depth:
-            return
-        if tag in {"nav", "header", "footer"}:
-            self.navigation_depth += 1
-        if tag == "title":
-            self.in_title = True
-        if tag == "a" and attributes.get("href"):
-            self.links.append(attributes["href"] or "")
-            if not self.navigation_depth:
-                self.content_links.append(attributes["href"] or "")
-        if tag in {"p", "br", "div", "li", "h1", "h2", "h3", "tr", "td", "th"}:
-            self.parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in {"script", "style", "noscript", "svg"} and self.hidden_depth:
-            self.hidden_depth -= 1
-            return
-        if self.hidden_depth:
-            return
-        if tag in {"nav", "header", "footer"} and self.navigation_depth:
-            self.navigation_depth -= 1
-        if tag == "title":
-            self.in_title = False
-        if tag in {"p", "div", "li", "h1", "h2", "h3", "tr"}:
-            self.parts.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        if self.hidden_depth:
-            return
-        self.parts.append(data)
-        if self.in_title:
-            self.title_parts.append(data)
+        super().handle_starttag(tag, attrs)
+        href = dict(attrs).get("href")
+        if tag == "a" and href and not self.hidden_depth:
+            self.links.append(href)
+            if not self.chrome_depth:
+                self.content_links.append(href)
 
 
 def _canonical_page_url(url: str, origin: tuple[str, str, int]) -> str | None:
@@ -79,6 +49,8 @@ def _canonical_page_url(url: str, origin: tuple[str, str, int]) -> str | None:
     if parts.username or parts.password:
         return None
     path = parts.path or "/"
+    if path.lower() in {"/index.html", "/index.htm"}:
+        path = "/"  # The same page as the site root; index it once.
     if path != "/" and not path.lower().endswith((".html", ".htm")):
         return None
     return urlunsplit(("https", parts.netloc.lower(), path, "", ""))
@@ -135,10 +107,9 @@ def crawl_html_source(
                     encoding = response.encoding or "utf-8"
                 parser = _PageParser()
                 parser.feed(bytes(body).decode(encoding, errors="replace"))
-                title = " ".join(" ".join(parser.title_parts).split())
-                text = " ".join(" ".join(parser.parts).split())
+                text = parser.text
                 if text and not (runbook_index and url == seed_url):
-                    pages.append(WebPage(url=url, title=title, text=text))
+                    pages.append(WebPage(url=url, title=parser.title, text=text, sections=tuple(parser.sections)))
                 links = parser.content_links if runbook_index and url == seed_url else parser.links
                 if runbook_index and url != seed_url:
                     links = []

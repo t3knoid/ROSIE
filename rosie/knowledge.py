@@ -32,8 +32,14 @@ class KnowledgeBase:
         )
         self.collection = settings.qdrant_collection
 
-    def ingest(self, text: str, source: str, kind: str = "document", *, replace_kind: bool = False) -> int:
-        passages = chunks(text)
+    def ingest(self, content: str | list[str], source: str, kind: str = "document", *, replace_kind: bool = False) -> int:
+        """Index text (split into passages here) or ready-made passages under one source.
+
+        Replaces the source's earlier passages of the same kind. Passages whose text is
+        unchanged are not re-embedded. With `replace_kind`, passages stored for this source
+        under the other kind are removed.
+        """
+        passages = chunks(content) if isinstance(content, str) else [passage for passage in content if passage.strip()]
         if not passages:
             return 0
         point_ids = [
@@ -108,6 +114,18 @@ class KnowledgeBase:
                     must=[models.FieldCondition(key="source", match=models.MatchValue(value=source))],
                     must_not=[models.FieldCondition(key="kind", match=models.MatchValue(value=kind))],
                 )
+            ),
+            wait=True,
+        )
+
+    def delete_sources(self, sources: list[str]) -> None:
+        """Remove every passage stored under any of these sources."""
+        if not sources or not self.client.collection_exists(self.collection):
+            return
+        self.client.delete(
+            collection_name=self.collection,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(must=[models.FieldCondition(key="source", match=models.MatchAny(any=sources))])
             ),
             wait=True,
         )

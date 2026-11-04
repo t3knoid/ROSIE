@@ -28,6 +28,7 @@ Any page error counts, including a single broken link or a link that redirects. 
 - **Documentation** is crawled recursively from the start page.
 - **Runbooks** are the pages linked from the runbook index's main content; links in its header, navigation, and footer are ignored. The index page itself is not indexed, and links inside runbooks are not followed.
 - Only same-origin HTTPS pages ending in `.html` or `.htm` (or `/`) are followed, up to `WEB_SOURCE_MAX_PAGES` per source. Redirects are not followed.
+- `/index.html` at the site root is treated as the same page as `/`.
 - A URL found by both crawls is stored once, as a runbook. If an older index stored a page under both kinds, the next sync corrects it.
 - Unchanged pages are not re-embedded, so repeat syncs are fast after the first.
 - Pages that are no longer linked are **not** removed from the index.

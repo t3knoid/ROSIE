@@ -108,3 +108,20 @@ def test_source_sync_replaces_conflicting_kind_without_touching_other_sources(ki
         assert knowledge.embeddings.calls == calls + (0 if unchanged else 1)
     finally:
         knowledge.client.close()
+
+def test_ingest_accepts_passages_and_delete_sources_removes_aliases() -> None:
+    knowledge = KnowledgeBase.__new__(KnowledgeBase)
+    knowledge.client = QdrantClient(":memory:")
+    knowledge.embeddings = FakeEmbeddings()
+    knowledge.collection = "test"
+    try:
+        knowledge.delete_sources(["https://example.test/index.html"])  # no collection yet
+        assert knowledge.ingest(["Page › Storage: Ceph", "  "], "https://example.test/", "document") == 1
+        knowledge.ingest("Old duplicate", "https://example.test/index.html", "document")
+        knowledge.delete_sources(["https://example.test/index.html", "https://example.test/index.htm"])
+        points, _ = knowledge.client.scroll(knowledge.collection, with_payload=True)
+        assert [(point.payload["source"], point.payload["text"]) for point in points] == [
+            ("https://example.test/", "Page › Storage: Ceph"),
+        ]
+    finally:
+        knowledge.client.close()

@@ -37,7 +37,7 @@ Settings for all of these are described in [configuration](configuration.md).
 
 ## Data Flows
 
-**Indexing.** Text is extracted from web pages, local files, or uploads; split into passages of about 1,200 characters; embedded by `llama-embeddings`; and stored in Qdrant. Each passage keeps its source (URL or file name) and kind. Re-indexing a source replaces its passages, and passages whose text has not changed are not re-embedded.
+**Indexing.** Text is extracted from web pages, local files, or uploads, leaving out site navigation, headers, and footers. It is split into passages at headings, with long sections split further (up to about 1,200 characters); each passage starts with its page title and section. Passages are embedded by `llama-embeddings` and stored in Qdrant. Each passage keeps its source (URL or file name) and kind. Re-indexing a source replaces its passages, and passages whose text has not changed are not re-embedded.
 
 **Source sync.** At startup, on request, and on the optional timer, the app crawls the configured documentation site and runbook index (same-origin HTTPS HTML only, with page and size limits) and indexes the pages. Chat is unavailable until one sync finishes without errors. Readiness and the sync lock are held in the app process, so the app must run as a single Uvicorn worker.
 

@@ -30,6 +30,10 @@
 - Exporting a runbook whose title contains non-Latin-1 characters, quotes, or line breaks no longer fails.
 - Large uploads no longer block other requests while they are processed.
 - Unchanged passages are not re-embedded or duplicated when a source is re-indexed.
+- Documents are split into passages at their headings, and each passage is labeled with its page and section. Previously, a fixed-size split could leave a heading in one passage and its content in the next, so content such as the home page's storage list was not found.
+- Site navigation, headers, and footers are no longer indexed as page content.
+- The site root's `/index.html` is no longer indexed separately from `/`; duplicates left by earlier versions are removed at the next sync.
+- The system prompt tells the model that evidence passages are excerpts, so it no longer claims a page lacks information the excerpt does not show.
 - Passages no longer start in the middle of a word. Previously, the overlap between passages could cut names such as `deploy_truenas_vms.yml` to `enas_vms.yml`, and answers repeated the fragment.
 
 ## 0.1.0 - Initial MVP

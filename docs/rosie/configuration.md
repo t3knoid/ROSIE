@@ -81,7 +81,7 @@ Then re-run `POST /api/ingest/local` or re-upload any files that were not from t
 | `RELEVANCE_THRESHOLD` | `0.35` | Minimum similarity (0 to 1) for a passage to count as evidence. Raise it to drop weak matches; lower it if relevant passages are missed. Also decides whether a runbook gap is reported. |
 | `QDRANT_COLLECTION` | `rosie_documents` | Qdrant collection that stores passages. |
 
-Passages are about 1,200 characters with a 160-character overlap. These sizes are not configurable.
+Documents are split into passages at their headings (HTML `h1`-`h4`, Markdown `#`-`####`), and each passage starts with its page title and section, such as `Home Lab Platform Overview › Platform Foundation › Storage & Data Protection:`. Short subsections are combined with their parent section; long sections are split into passages of up to about 1,200 characters that overlap by about 160. Site navigation, headers, and footers are not indexed. These sizes are not configurable.
 
 ## Documentation Sources
 

@@ -19,14 +19,18 @@ def sync_result(pages: int, errors: list[str]) -> dict[str, object]:
 
 class FakeKnowledgeBase:
     def __init__(self) -> None:
-        self.ingested: list[tuple[str, str, str]] = []
+        self.ingested: list[tuple[str | list[str], str, str]] = []
         self.reclassified: list[str] = []
+        self.deleted: list[str] = []
 
-    def ingest(self, text: str, source: str, kind: str, *, replace_kind: bool = False) -> int:
-        self.ingested.append((text, source, kind))
+    def ingest(self, content: str | list[str], source: str, kind: str, *, replace_kind: bool = False) -> int:
+        self.ingested.append((content, source, kind))
         if replace_kind:
             self.reclassified.append(source)
         return 1
+
+    def delete_sources(self, sources: list[str]) -> None:
+        self.deleted.extend(sources)
 
     def search(self, query: str, kind: str | None = None, limit: int = 5) -> list[dict[str, str | float]]:
         if kind == "runbook":
@@ -177,6 +181,9 @@ def test_ingest_configured_sources_indexes_overview_and_runbooks(monkeypatch) ->
     assert response.json()["pages_by_kind"] == {"document": 1, "runbook": 1}
     assert requested == [main.settings.documentation_source_url, main.settings.runbook_source_url]
     assert [item[2] for item in knowledge.ingested] == ["document", "runbook"]
+    assert knowledge.ingested[0][0] == ["Home Lab Overview: Operational guidance."]
+    root = main.settings.documentation_source_url
+    assert knowledge.deleted == [root + "index.html", root + "index.htm"]
 
 
 def test_source_sync_counts_overlapping_pages_once_with_runbook_priority(monkeypatch) -> None:
