@@ -345,3 +345,11 @@ def test_enter_sends_prompt_and_shift_enter_adds_line() -> None:
     assert "event.shiftKey || event.isComposing" in page
     assert "form.requestSubmit(askButton)" in page
     assert "Shift+Enter for a new line" in page
+
+
+def test_prompt_explains_that_questions_are_independent() -> None:
+    page = TestClient(main.app).get("/").text
+    assert 'aria-describedby="prompt-hint"' in page
+    assert 'id="prompt-hint"' in page
+    assert "ROSIE does not see earlier questions or answers" in page
+    assert page.index('id="question-form"') < page.index('id="prompt-hint"') < page.index('id="sync-sources"')

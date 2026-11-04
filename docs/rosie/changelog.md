@@ -12,6 +12,7 @@
 - Swagger documentation at `/docs` with descriptions, examples, error codes, and typed responses for every endpoint.
 - URLs in answers, including URLs in inline code, are clickable.
 - Pressing Enter in the prompt sends the question; Shift+Enter adds a new line.
+- A note under the prompt explains that each question is answered on its own, without earlier questions or answers.
 - A [configuration reference](configuration.md), plus [source sync](operations/source-sync.md) and [troubleshooting](operations/troubleshooting.md) guides.
 
 ### Changed

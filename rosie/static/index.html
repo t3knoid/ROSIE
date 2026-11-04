@@ -34,6 +34,7 @@
     .answer-evidence li + li { margin-top: 4px; }
     .notice { color: var(--coral); font: 13px 'Trebuchet MS', sans-serif; }
     #chat-status { min-height: 1.5em; color: var(--muted); font: 13px 'Trebuchet MS', sans-serif; }
+    .prompt-hint { margin: 8px 0 0; color: var(--muted); font: 13px/1.5 'Trebuchet MS', sans-serif; }
     .source-sync { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 8px; font: 13px/1.5 'Trebuchet MS', sans-serif; }
     #sync-sources { color: var(--green); text-underline-offset: 3px; }
     #sync-sources[aria-disabled="true"] { opacity: .55; cursor: wait; }
@@ -58,7 +59,8 @@
       <h1>What needs investigating?</h1>
       <p class="intro">Ask about an incident. ROSIE will check your indexed documentation and show its sources.</p>
       <div id="thread" aria-live="polite"></div>
-      <form id="question-form"><textarea id="question" placeholder="Describe the symptom or error... (Enter to send, Shift+Enter for a new line)" required maxlength="4000" aria-keyshortcuts="Enter" aria-label="Incident question" disabled></textarea><button id="ask" type="submit" disabled>Investigate</button></form>
+      <form id="question-form"><textarea id="question" placeholder="Describe the symptom or error... (Enter to send, Shift+Enter for a new line)" required maxlength="4000" aria-keyshortcuts="Enter" aria-describedby="prompt-hint" aria-label="Incident question" disabled></textarea><button id="ask" type="submit" disabled>Investigate</button></form>
+      <p id="prompt-hint" class="prompt-hint">Each question is answered on its own; ROSIE does not see earlier questions or answers. Include the full context, for example "List every storage system in the homelab" rather than "What about storage?"</p>
       <div class="source-sync">
         <a id="sync-sources" href="#sync-status" aria-controls="sync-status">Sync sources</a>
         <p id="sync-status" role="status" aria-live="polite">Checking source sync...</p>
