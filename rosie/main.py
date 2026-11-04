@@ -1,5 +1,10 @@
+import asyncio
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from functools import lru_cache
+import logging
 from pathlib import Path
+from threading import Lock
 from time import perf_counter
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -17,7 +22,40 @@ from rosie.web_sources import WebPage, crawl_html_source
 from rosie.workflow import build_investigation_graph, draft_runbook
 from rosie.gpu_status import router as gpu_router
 
-app = FastAPI(title=settings.app_name, version="0.1.0")
+def initial_sync_status() -> dict[str, object]:
+    return {"ready": False, "syncing": False, "last_success": None, "error": None, "result": None}
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    application.state.source_sync = initial_sync_status()
+    stopping = asyncio.Event()
+
+    async def startup_sync():
+        while not application.state.source_sync["ready"]:
+            try:
+                await asyncio.to_thread(ingest_configured_sources)
+            except Exception:
+                logging.getLogger(__name__).exception("Startup source sync failed")
+            if application.state.source_sync["ready"] or stopping.is_set():
+                return
+            try:
+                await asyncio.wait_for(stopping.wait(), timeout=30)
+                return
+            except TimeoutError:
+                pass
+
+    task = asyncio.create_task(startup_sync())
+    try:
+        yield
+    finally:
+        stopping.set()
+        await task
+
+
+app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+app.state.source_sync = initial_sync_status()
+source_sync_lock = Lock()
 app.include_router(gpu_router)
 
 @lru_cache
@@ -87,8 +125,7 @@ def ingest_local_documents() -> dict[str, int]:
     return {"files": len(documents), "chunks": total}
 
 
-@app.post("/api/ingest/sources")
-def ingest_configured_sources() -> dict[str, object]:
+def _ingest_configured_sources() -> dict[str, object]:
     sources = [
         (settings.documentation_source_url, "document"),
         (settings.runbook_source_url, "runbook"),
@@ -134,6 +171,36 @@ def ingest_configured_sources() -> dict[str, object]:
     return {"pages": page_count, "chunks": chunk_count, "pages_by_kind": pages_by_kind, "errors": errors}
 
 
+@app.get("/api/ingest/sources/status")
+def source_sync_status() -> dict[str, object]:
+    return app.state.source_sync
+
+
+@app.post("/api/ingest/sources")
+def ingest_configured_sources() -> dict[str, object]:
+    if not source_sync_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="Source sync is already running")
+    previous = app.state.source_sync
+    app.state.source_sync = {**previous, "syncing": True, "error": None}
+    try:
+        result = _ingest_configured_sources()
+        errors = result["errors"]
+        app.state.source_sync = {
+            "ready": previous["ready"] or not errors,
+            "syncing": False,
+            "last_success": previous["last_success"] if errors else datetime.now(timezone.utc).isoformat(),
+            "error": f"Source sync reported partial failures: {errors}" if errors else None,
+            "result": result,
+        }
+        return result
+    except Exception as error:
+        detail = error.detail if isinstance(error, HTTPException) else str(error)
+        app.state.source_sync = {**previous, "syncing": False, "error": str(detail)}
+        raise
+    finally:
+        source_sync_lock.release()
+
+
 @app.get("/api/search")
 def search_documents(q: str, kind: str | None = None, limit: int = 5) -> list[Evidence]:
     if kind not in {None, "document", "runbook"}:
@@ -147,6 +214,8 @@ def search_documents(q: str, kind: str | None = None, limit: int = 5) -> list[Ev
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
+    if not app.state.source_sync["ready"]:
+        raise HTTPException(status_code=503, detail="Sources must finish syncing before investigating")
     started_at = perf_counter()
     try:
         result = get_investigation_graph().invoke({"question": request.question})

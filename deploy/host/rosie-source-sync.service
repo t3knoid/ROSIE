@@ -1,0 +1,16 @@
+[Unit]
+Description=Refresh ROSIE documentation and runbook sources when due
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/rosie
+ExecStart=/opt/rosie/.venv/bin/python -m rosie.source_sync --state-file /var/lib/rosie-source-sync/last-attempt
+DynamicUser=yes
+StateDirectory=rosie-source-sync
+TimeoutStartSec=infinity
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes

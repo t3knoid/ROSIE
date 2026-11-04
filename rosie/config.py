@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +32,10 @@ class Settings(BaseSettings):
     web_source_max_pages: int = 100
     web_source_timeout_seconds: float = 15
     web_source_max_page_bytes: int = 2_000_000
+    source_sync_enabled: bool = True
+    source_sync_interval_seconds: int = Field(default=3600, gt=0)
+    source_sync_api_url: str = "http://127.0.0.1:8001/api/ingest/sources"
+    source_sync_timeout_seconds: float = Field(default=3600, gt=0)
     chat_evidence_limit: int = 2
     chat_max_output_tokens: int = 512
     llama_chat_base_url: str = "http://localhost:8080/v1"

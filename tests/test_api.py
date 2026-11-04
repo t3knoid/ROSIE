@@ -1,7 +1,15 @@
+import asyncio
+
 from fastapi.testclient import TestClient
+import pytest
 
 from rosie import audit, main
 from rosie.web_sources import CrawlResult, WebPage
+
+
+@pytest.fixture(autouse=True)
+def ready_sources(monkeypatch):
+    monkeypatch.setitem(main.app.state._state, "source_sync", {**main.initial_sync_status(), "ready": True})
 
 
 class FakeKnowledgeBase:
@@ -100,11 +108,29 @@ def test_home_page_exposes_source_sync_and_last_sync_status() -> None:
 
     assert response.status_code == 200
     assert 'id="ask" type="submit" disabled' in response.text
-    assert 'id="sync-sources"' in response.text
+    assert '<a id="sync-sources" href="#sync-status"' in response.text
+    assert '<button id="sync-sources"' not in response.text
     assert 'id="sync-status"' in response.text
+    assert response.text.index('id="question-form"') < response.text.index('id="sync-sources"') < response.text.index('</main>')
+    assert 'aria-label="Incident question" disabled' in response.text
+    assert 'Checking source sync...' in response.text
+    assert 'askButton.disabled = !sourcesReady || isInvestigating || !input.value.trim();' in response.text
+    assert "'/api/ingest/sources/status'" in response.text
     assert "'/api/ingest/sources'" in response.text
     assert "result.duration_seconds" in response.text
-    assert "rosie-last-successful-source-sync" in response.text
+    assert 'localStorage' not in response.text
+
+
+def test_home_page_moves_hardware_into_collapsed_footer() -> None:
+    page = TestClient(main.app).get("/").text
+
+    assert '<aside' not in page
+    assert 'grid-template-columns' not in page
+    assert page.index('</main>') < page.index('<footer id="gpu-panel"')
+    assert '<details>' in page and '<details open' not in page
+    assert '<summary>Hardware: <span id="gpu-summary"' in page
+    assert 'id="gpu-detail"' in page
+    assert "'/api/health/gpu'" in page
 
 
 def test_ingest_validates_file_and_records_extracted_text(monkeypatch) -> None:
@@ -171,3 +197,105 @@ def test_source_sync_counts_overlapping_pages_once_with_runbook_priority(monkeyp
         (document.url, "document"), (runbook.url, "runbook"),
     ]
     assert knowledge.reclassified == [document.url, runbook.url]
+
+
+def test_chat_is_blocked_until_server_sync_succeeds(monkeypatch):
+    main.app.state.source_sync = main.initial_sync_status()
+    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: {"pages": 2, "errors": []})
+    monkeypatch.setattr(main, "get_investigation_graph", lambda: FakeGraph())
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+    client = TestClient(main.app)
+    assert client.post("/api/chat", json={"question": "Check logs"}).status_code == 503
+    assert not client.get("/api/ingest/sources/status").json()["ready"]
+    assert client.post("/api/ingest/sources").status_code == 200
+    status = client.get("/api/ingest/sources/status").json()
+    assert status["ready"] and status["last_success"]
+    assert client.post("/api/chat", json={"question": "Check logs"}).status_code == 200
+
+
+def test_startup_runs_source_sync_and_resets_readiness(monkeypatch):
+    calls = []
+
+    def ingest():
+        calls.append(main.app.state.source_sync["ready"])
+        return {"pages": 2, "errors": []}
+
+    monkeypatch.setattr(main, "_ingest_configured_sources", ingest)
+
+    async def run_lifespan():
+        async with main.lifespan(main.app):
+            assert not main.app.state.source_sync["ready"]
+
+    asyncio.run(run_lifespan())
+    assert calls == [False]
+    assert main.app.state.source_sync["ready"]
+
+
+@pytest.mark.parametrize("partial", [True, False])
+def test_failed_initial_sync_stays_locked_and_can_be_retried(monkeypatch, partial):
+    main.app.state.source_sync = main.initial_sync_status()
+
+    def ingest():
+        if partial:
+            return {"pages": 1, "errors": ["Page unavailable"]}
+        raise main.HTTPException(status_code=502, detail="Source unavailable")
+
+    monkeypatch.setattr(main, "_ingest_configured_sources", ingest)
+    client = TestClient(main.app)
+    client.post("/api/ingest/sources")
+    status = client.get("/api/ingest/sources/status").json()
+    assert not status["ready"] and not status["syncing"] and status["error"]
+    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: {"pages": 2, "errors": []})
+    assert client.post("/api/ingest/sources").status_code == 200
+    assert client.get("/api/ingest/sources/status").json()["ready"]
+
+
+def test_overlapping_sync_is_rejected():
+    with main.source_sync_lock:
+        assert TestClient(main.app).post("/api/ingest/sources").status_code == 409
+
+
+def test_failed_startup_keeps_app_available_but_prompt_locked(monkeypatch):
+    def ingest():
+        raise RuntimeError("Embedding service unavailable")
+
+    monkeypatch.setattr(main, "_ingest_configured_sources", ingest)
+
+    async def run_lifespan():
+        async with main.lifespan(main.app):
+            pass
+
+    asyncio.run(run_lifespan())
+    status = TestClient(main.app).get("/api/ingest/sources/status").json()
+    assert not status["ready"] and not status["syncing"]
+    assert status["error"] == "Embedding service unavailable"
+
+
+def test_failed_refresh_does_not_discard_initial_readiness(monkeypatch):
+    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: {"pages": 1, "errors": ["Unavailable"]})
+    client = TestClient(main.app)
+    assert client.post("/api/ingest/sources").status_code == 200
+    assert client.get("/api/ingest/sources/status").json()["ready"]
+
+
+def test_startup_retries_until_initial_sync_succeeds(monkeypatch):
+    calls = []
+
+    def ingest():
+        calls.append(True)
+        return {"pages": 1, "errors": ["Not ready"] if len(calls) == 1 else []}
+
+    async def skip_retry_delay(awaitable, timeout):
+        awaitable.close()
+        raise TimeoutError
+
+    monkeypatch.setattr(main, "_ingest_configured_sources", ingest)
+    monkeypatch.setattr(main.asyncio, "wait_for", skip_retry_delay)
+
+    async def run_lifespan():
+        async with main.lifespan(main.app):
+            while not main.app.state.source_sync["ready"]:
+                await asyncio.sleep(0)
+
+    asyncio.run(run_lifespan())
+    assert len(calls) == 2

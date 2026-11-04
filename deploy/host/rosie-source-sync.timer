@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the configured ROSIE source sync schedule every minute
+
+[Timer]
+OnCalendar=minutely
+Persistent=true
+Unit=rosie-source-sync.service
+
+[Install]
+WantedBy=timers.target
