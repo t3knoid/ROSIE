@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from functools import lru_cache
 import logging
 from pathlib import Path
+import re
+from urllib.parse import quote
 from threading import Lock
 from time import perf_counter
 
@@ -96,6 +98,11 @@ async def ingest_document(
     content = await file.read(10 * 1024 * 1024 + 1)
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Documents must be 10 MB or smaller")
+    # Parsing, embedding, and Qdrant writes block; keep them off the event loop.
+    return await asyncio.to_thread(_ingest_uploaded_document, filename, content, kind)
+
+
+def _ingest_uploaded_document(filename: str, content: bytes, kind: str) -> dict[str, str | int]:
     try:
         text = load_document(filename, content)
     except (ValueError, UnicodeDecodeError) as error:
@@ -268,8 +275,15 @@ def export_runbook(runbook: Runbook) -> PlainTextResponse:
     audit.record("runbook_exported", {"title": runbook.title})
     return PlainTextResponse(
         to_markdown(runbook),
-        headers={"Content-Disposition": f'attachment; filename="{runbook.title[:80]}.md"'},
+        headers={"Content-Disposition": _markdown_attachment_header(runbook.title)},
     )
+
+
+def _markdown_attachment_header(title: str) -> str:
+    """Build a Content-Disposition header that is always valid Latin-1 (RFC 6266/5987)."""
+    name = " ".join(title.split())[:80] or "runbook"
+    fallback = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-.") or "runbook"
+    return f"attachment; filename=\"{fallback}.md\"; filename*=UTF-8''{quote(name + '.md', safe='')}"
 
 
 @app.post("/api/runbooks/publish")

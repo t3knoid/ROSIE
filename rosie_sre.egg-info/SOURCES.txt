@@ -4,11 +4,14 @@ rosie/__init__.py
 rosie/audit.py
 rosie/config.py
 rosie/documents.py
+rosie/gpu_status.py
 rosie/knowledge.py
 rosie/main.py
 rosie/models.py
 rosie/publisher.py
+rosie/rendering.py
 rosie/runbooks.py
+rosie/source_sync.py
 rosie/web_sources.py
 rosie/workflow.py
 rosie_sre.egg-info/PKG-INFO
@@ -18,8 +21,12 @@ rosie_sre.egg-info/requires.txt
 rosie_sre.egg-info/top_level.txt
 tests/test_api.py
 tests/test_documents.py
+tests/test_gpu_status.py
 tests/test_knowledge.py
+tests/test_p4_thermal.py
 tests/test_publisher.py
+tests/test_rendering.py
 tests/test_runbooks.py
+tests/test_source_sync.py
 tests/test_system_prompt.py
 tests/test_web_sources.py

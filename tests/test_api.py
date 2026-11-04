@@ -299,3 +299,22 @@ def test_startup_retries_until_initial_sync_succeeds(monkeypatch):
 
     asyncio.run(run_lifespan())
     assert len(calls) == 2
+
+
+def test_export_handles_non_latin1_and_unsafe_titles(monkeypatch) -> None:
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+    client = TestClient(main.app)
+    title = 'Disk full — "recovery"\nsteps'
+    response = client.post("/api/runbooks/export", json={"title": title, "purpose": "p", "scope": "s"})
+    assert response.status_code == 200
+    disposition = response.headers["content-disposition"]
+    assert 'filename="Disk-full-recovery-steps.md"' in disposition
+    assert "filename*=UTF-8''Disk%20full%20%E2%80%94%20%22recovery%22%20steps.md" in disposition
+    assert response.text.startswith(f"# {title}")
+
+
+def test_ingest_rejects_upload_without_text(monkeypatch) -> None:
+    monkeypatch.setattr(main, "get_knowledge_base", lambda: FakeKnowledgeBase())
+    client = TestClient(main.app)
+    response = client.post("/api/ingest", files={"file": ("empty.md", b"   \n")})
+    assert response.status_code == 422
