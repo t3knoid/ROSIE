@@ -25,3 +25,22 @@ def test_empty_and_unsupported_documents() -> None:
     assert chunks("  \n ") == []
     with pytest.raises(ValueError, match="Unsupported document type"):
         load_document("notes.exe", b"data")
+
+
+def test_chunks_start_and_end_on_word_boundaries() -> None:
+    words = ["playbooks/truenas/deploy_truenas_vms.yml", "--check", "--diff", "variable", "truenas_vms", "list"]
+    text = " ".join(words[i % len(words)] for i in range(600))
+    result = chunks(text)
+    assert len(result) > 3
+    for passage in result:
+        assert passage.split(" ")[0] in words
+        assert passage.split(" ")[-1] in words
+    for previous, current in zip(result, result[1:]):
+        assert len(previous) <= 1200
+        assert previous[-160:].split(" ", 1)[-1] in current
+
+
+def test_chunks_still_split_text_without_spaces() -> None:
+    result = chunks("x" * 3000)
+    assert len(result) > 2
+    assert "".join(passage[:-160] for passage in result[:-1]) + result[-1] == "x" * 3000

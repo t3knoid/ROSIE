@@ -72,5 +72,12 @@ def chunks(text: str, size: int = 1200, overlap: int = 160) -> list[str]:
         result.append(clean[start:end])
         if end == len(clean):
             break
-        start = max(end - overlap, start + 1)
+        next_start = end - overlap
+        # Begin the overlap at a word boundary. A passage that starts mid-word shows the
+        # model a fragment such as "enas_vms.yml" for "deploy_truenas_vms.yml".
+        if next_start > start and clean[next_start - 1] != " ":
+            boundary = clean.rfind(" ", start + 1, next_start)
+            if boundary != -1:
+                next_start = boundary + 1
+        start = max(next_start, start + 1)
     return result

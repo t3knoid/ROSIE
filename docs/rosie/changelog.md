@@ -29,6 +29,7 @@
 - Exporting a runbook whose title contains non-Latin-1 characters, quotes, or line breaks no longer fails.
 - Large uploads no longer block other requests while they are processed.
 - Unchanged passages are not re-embedded or duplicated when a source is re-indexed.
+- Passages no longer start in the middle of a word. Previously, the overlap between passages could cut names such as `deploy_truenas_vms.yml` to `enas_vms.yml`, and answers repeated the fragment.
 
 ## 0.1.0 - Initial MVP
 
