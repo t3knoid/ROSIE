@@ -1,16 +1,38 @@
 # Roadmap
 
-## v0.1: Documentation MVP
+## v0.1: Documentation MVP (current)
 
-- Browser chat, FastAPI, LangGraph, llama.cpp with GGUF models, and Qdrant
-- Local document ingestion and semantic runbook/document search
-- Evidence-aware troubleshooting, runbook gap checks, canonical runbook drafts
-- Markdown export, local Git repository storage, and JSONL audit trail
+- Browser chat and REST API on FastAPI, with a LangGraph investigation workflow
+- Local llama.cpp chat and embedding models (GGUF) and Qdrant storage
+- Documentation and runbook ingestion from configured websites, local files, and uploads
+- Evidence-aware answers with sources, and runbook gap checks
+- Structured runbook drafts, Markdown export, and uncommitted drafts in a local Git checkout
+- JSON Lines audit log
 
-## Later, Not Included
+v0.1 includes no infrastructure actions and no live-system integrations.
+
+## v0.2: Additional Export Formats
+
+- HTML and PDF export
+- DOCX and ODT export
+
+## v0.3: Documentation Platforms
+
+- Confluence, Wiki.js, BookStack, and MediaWiki integrations
+
+## v0.4: Source-Control Workflows
+
+- GitHub pull requests and GitLab merge requests
+- Documentation review and approval workflows
+
+## v1.0: Read-Only Infrastructure Awareness
+
+- Read-only observability integrations (such as Grafana, Prometheus, and Loki)
+- Read-only infrastructure and networking integrations
+- Multi-platform documentation management
+
+## Not Yet Scheduled
 
 - Authentication, roles, approvals, and multi-user audit identity
-- More model providers and document/wiki connectors
-- Read-only observability integrations
-- Read-only infrastructure and networking integrations
+- Additional model providers
 - Operator-approved actions, only after a separate threat model and approval design

@@ -1,3 +1,7 @@
+> **Archived.** This is the original v0.1 design draft, kept for history. It is not maintained and
+> does not describe current behavior: some choices were never adopted, and the documentation layout
+> in section 15 has changed. For current behavior, start at the [documentation index](../README.md).
+
 # ROSIE Development Requirements Document (Draft v0.1)
 
 ## 1. Project Overview

@@ -4,6 +4,12 @@ services:
     build: .
     ports:
       - "8001:8000"
+    # Passes every .env value to the app (unknown names are ignored), so app settings
+    # such as ORGANIZATION_NAME work without listing them here. Entries under
+    # `environment` take precedence over values from this file.
+    env_file:
+      - path: .env
+        required: false
     environment:
       LLAMA_CHAT_BASE_URL: ${LLAMA_CHAT_BASE_URL:-http://llama-chat:8080/v1}
       LLAMA_EMBEDDING_BASE_URL: ${LLAMA_EMBEDDING_BASE_URL:-http://llama-embeddings:8081/v1}
@@ -52,7 +58,7 @@ services:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     command:
       - --model
-      - /models/${LLAMA_CHAT_MODEL_FILE:-Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf}
+      - /models/${LLAMA_CHAT_MODEL_FILE:-Llama-3.2-3B-Instruct-Q4_K_M.gguf}
       - --host
       - 0.0.0.0
       - --port

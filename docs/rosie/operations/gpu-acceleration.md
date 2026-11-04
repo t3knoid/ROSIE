@@ -15,9 +15,9 @@ Both services use `ghcr.io/ggml-org/llama.cpp:server-cuda`, receive an NVIDIA GP
 
 ## Memory and Context Sizing
 
-The Tesla P4 has 8 GB of VRAM. ROSIE's default Llama 3.2 3B Q4_K_M chat weights occupy about 2.02 GB; the context cache and CUDA runtime need additional memory. The embedding model is much smaller but adds its own GPU allocation (allow a few hundred MB). Both servers share the same card, leaving more VRAM headroom than the previous 8B model, although available memory still depends on other GPU processes and runtime settings. The single-slot default avoids multiplying context-cache allocation across several simultaneous requests.
+The Tesla P4 has 8 GB of VRAM. ROSIE's default Llama 3.2 3B Q4_K_M chat weights occupy about 2.02 GB; the context cache and CUDA runtime need additional memory. The embedding model is much smaller but adds its own GPU allocation (allow a few hundred MB). Both servers share the same card, and available memory also depends on other GPU processes and runtime settings. The single-slot default avoids multiplying context-cache allocation across several simultaneous requests.
 
-Keep the chat context as small as the workload allows to avoid exhausting VRAM. ROSIE sets `LLAMA_CTX_SIZE=10240` by default, corresponding to llama.cpp's `-c 10240` option; this accommodates the observed 7,666-token prompt with some room for a response. If the P4 reports CUDA out-of-memory, reduce `LLAMA_CTX_SIZE` and/or `LLAMA_N_GPU_LAYERS` as described in [Tune VRAM Use](#8-tune-vram-use).
+Keep the chat context as small as the workload allows to avoid exhausting VRAM. ROSIE sets `LLAMA_CTX_SIZE=10240` by default, corresponding to llama.cpp's `-c 10240` option. The context must hold the system prompt, the evidence passages (`CHAT_EVIDENCE_LIMIT`), the question, and the answer (up to `CHAT_MAX_OUTPUT_TOKENS`); with the defaults this uses well under half of it, leaving room to raise those settings. If the P4 reports CUDA out-of-memory, reduce `LLAMA_CTX_SIZE` and/or `LLAMA_N_GPU_LAYERS` as described in [Tune VRAM Use](#8-tune-vram-use).
 
 ## CUDA Architecture Compatibility
 
@@ -97,7 +97,7 @@ grep -E '^(LLAMA_MODELS_PATH|LLAMA_N_GPU_LAYERS|LLAMA_CTX_SIZE|LLAMA_CHAT_MODEL_
 ls -lh ./models/Llama-3.2-3B-Instruct-Q4_K_M.gguf ./models/nomic-embed-text-v1.5.Q4_K_M.gguf
 ```
 
-`LLAMA_N_GPU_LAYERS=99` asks llama.cpp to offload all layers that the model has. It does not reserve 99 layers or guarantee that all layers fit in VRAM. If you use different filenames or a different model directory, update the corresponding `.env` values. The [model configuration guide](model-configurations.md) links the default sources and licenses.
+`LLAMA_N_GPU_LAYERS=99` asks llama.cpp to offload all layers that the model has. It does not reserve 99 layers or guarantee that all layers fit in VRAM. If you use different filenames or a different model directory, update the corresponding `.env` values. The root README links the default model sources and licenses, and [configuration](../configuration.md#models-and-gpu) describes every model setting.
 
 ## 6. Start ROSIE with GPU Access
 
@@ -156,15 +156,15 @@ sudo docker compose logs --tail=100 llama-chat llama-embeddings
 
 Start with a lower value such as `20`, then increase it gradually if memory permits. The same setting applies to both services. Because both models share the P4, other GPU workloads also reduce the available headroom. The remaining layers run on the CPU when the selected value is lower than the model's total layer count.
 
-The chat context size also consumes memory through the KV cache. The current default is `LLAMA_CTX_SIZE=4096`. If memory is still insufficient after reducing GPU layers, lower the context size in `.env` and recreate the chat service:
+The chat context size also consumes memory through the KV cache. The default is `LLAMA_CTX_SIZE=10240`. If memory is still insufficient after reducing GPU layers, lower the context size in `.env` and recreate the chat service:
 
 ```sh
-sed -i 's/^LLAMA_CTX_SIZE=.*/LLAMA_CTX_SIZE=2048/' .env
+sed -i 's/^LLAMA_CTX_SIZE=.*/LLAMA_CTX_SIZE=4096/' .env
 sudo docker compose up -d --force-recreate llama-chat
 sudo docker compose logs --tail=100 llama-chat
 ```
 
-Use the lower context only if it meets your workload's needs; available context affects how much prompt and conversation history the chat server can process.
+Use the lower context only if it meets your workload's needs. If answers fail with a context-length error afterwards, lower `CHAT_EVIDENCE_LIMIT` or `CHAT_MAX_OUTPUT_TOKENS` as well.
 
 To restore the default full-offload request:
 
@@ -172,6 +172,15 @@ To restore the default full-offload request:
 sed -i 's/^LLAMA_N_GPU_LAYERS=.*/LLAMA_N_GPU_LAYERS=99/' .env
 sudo docker compose up -d --force-recreate llama-chat llama-embeddings
 ```
+
+## Response Speed
+
+On a card like the P4, most of the answer time is prompt processing and generation. Two app settings in `.env` trade answer quality for speed:
+
+- `CHAT_EVIDENCE_LIMIT` (default `2`): passages sent with each question. Fewer passages mean a shorter prompt.
+- `CHAT_MAX_OUTPUT_TOKENS` (default `512`): the longest answer. A lower limit caps generation time but can cut answers short.
+
+Apply changes with `sudo docker compose up -d app`. Each answer shows its generation time, and the hardware footer on the chat page shows when thermal throttling is slowing the GPU.
 
 ## Troubleshooting
 

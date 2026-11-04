@@ -133,9 +133,8 @@ used/total VRAM in MiB (`gpu.memory_used_mib` / `gpu.memory_total_mib`), includi
 the percentage used. It refreshes every 10 seconds while the page is visible;
 the host controller samples every five seconds by default. Missing model or memory
 readings are labeled unavailable, and stale readings are not displayed as live.
-Older installed controllers already report memory but must be updated using the
-reviewed host-service procedure above to include the model name. Updating this
-repository alone does not update the installed host service.
+The installed controller is a copy in `/usr/local/bin`. Updating this repository
+does not update it; repeat the reviewed installation in step 3 to deploy a newer version.
 
 ## 5. Tune Thresholds
 
@@ -161,7 +160,7 @@ sudo systemctl restart p4-thermal.service
 sudo systemctl status p4-thermal.service --no-pager
 ```
 
-The Tesla P4 previously reached 81 C and has reported Xid 79 (“GPU has fallen off the bus”). Fan control cannot repair a PCIe, power, driver, or hardware fault. Do not treat this controller as a substitute for stabilizing the GPU, and inspect system logs and physical cooling if Xid errors recur.
+Fan control cannot repair a PCIe, power, driver, or hardware fault. Do not treat this controller as a substitute for stabilizing the GPU, and inspect system logs and physical cooling if NVIDIA Xid errors appear (see [lessons learned](../lessons-learned.md)).
 
 ## Stop, Disable, or Roll Back
 
