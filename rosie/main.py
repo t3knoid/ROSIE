@@ -425,7 +425,12 @@ def chat(request: ChatRequest) -> ChatResponse:
     ]
     audit.record(
         "question_investigated",
-        {"question": request.question, "evidence": [item.source for item in evidence], "runbook_gap": result.get("runbook_gap", True)},
+        {
+            "question": request.question,
+            "evidence": [item.source for item in evidence],
+            "runbook_gap": result.get("runbook_gap", True),
+            "truncated": result.get("truncated", False),
+        },
     )
     duration_seconds = round(perf_counter() - started_at, 3)
     return ChatResponse(
@@ -433,6 +438,7 @@ def chat(request: ChatRequest) -> ChatResponse:
         answer_html=markdown_to_safe_html(result["answer"]),
         evidence=evidence,
         runbook_gap=result.get("runbook_gap", True),
+        truncated=result.get("truncated", False),
         duration_seconds=duration_seconds,
     )
 

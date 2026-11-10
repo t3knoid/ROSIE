@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     source_sync_api_url: str = "http://127.0.0.1:8001/api/ingest/sources"
     source_sync_timeout_seconds: float = Field(default=3600, gt=0)
     chat_evidence_limit: int = 2
-    chat_max_output_tokens: int = 512
+    chat_max_output_tokens: int = 1536
     llama_chat_base_url: str = "http://localhost:8080/v1"
     llama_embedding_base_url: str = "http://localhost:8081/v1"
     llama_chat_model: str = "local-chat"

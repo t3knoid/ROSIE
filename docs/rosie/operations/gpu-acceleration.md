@@ -178,7 +178,7 @@ sudo docker compose up -d --force-recreate llama-chat llama-embeddings
 On a card like the P4, most of the answer time is prompt processing and generation. Two app settings in `.env` trade answer quality for speed:
 
 - `CHAT_EVIDENCE_LIMIT` (default `2`): passages sent with each question. Fewer passages mean a shorter prompt.
-- `CHAT_MAX_OUTPUT_TOKENS` (default `512`): the longest answer. A lower limit caps generation time but can cut answers short.
+- `CHAT_MAX_OUTPUT_TOKENS` (default `1536`): the longest answer. A lower limit caps generation time but can cut answers short; a cut-off answer ends with a note saying so.
 
 Apply changes with `sudo docker compose up -d app`. Each answer shows its generation time, and the hardware footer on the chat page shows when thermal throttling is slowing the GPU.
 

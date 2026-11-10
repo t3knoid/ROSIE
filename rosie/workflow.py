@@ -15,6 +15,7 @@ class InvestigationState(TypedDict, total=False):
     answer: str
     runbook: dict[str, str | float] | None
     runbook_gap: bool
+    truncated: bool
 
 
 def load_system_prompt() -> str:
@@ -48,6 +49,13 @@ def _runbook_result(runbook: dict[str, str | float] | None) -> str:
     )
 
 
+def _truncation_note() -> str:
+    return (
+        f"\n\n*This answer was cut off at the output limit of {settings.chat_max_output_tokens} tokens. "
+        "Ask a narrower question, or raise `CHAT_MAX_OUTPUT_TOKENS` and restart ROSIE.*"
+    )
+
+
 def build_investigation_graph(knowledge: KnowledgeBase | None = None, llm=None):
     knowledge = knowledge or KnowledgeBase()
     llm = llm or ChatOpenAI(
@@ -67,7 +75,7 @@ def build_investigation_graph(knowledge: KnowledgeBase | None = None, llm=None):
         evidence = evidence + [item for item in runbook_evidence if (item["source"], item["text"]) not in seen]
         return {"evidence": evidence, "runbook": runbook_evidence[0] if runbook_evidence else None, "runbook_gap": not runbook_evidence}
 
-    def examine(state: InvestigationState) -> dict[str, str]:
+    def examine(state: InvestigationState) -> dict[str, str | bool]:
         evidence = state.get("evidence", [])
         context = _evidence_context(evidence) or "No matching local documentation was found."
         user_context = f"""Investigate this user question:
@@ -87,7 +95,12 @@ def build_investigation_graph(knowledge: KnowledgeBase | None = None, llm=None):
             HumanMessage(content=user_context),
             ]
         )
-        return {"answer": str(response.content)}
+        answer = str(response.content)
+        # llama.cpp reports "length" when generation stopped at max_tokens, not at the end of the answer.
+        truncated = (getattr(response, "response_metadata", None) or {}).get("finish_reason") == "length"
+        if truncated:
+            answer += _truncation_note()
+        return {"answer": answer, "truncated": truncated}
 
     graph = StateGraph(InvestigationState)
     graph.add_node("observe", observe)

@@ -35,6 +35,9 @@ class ChatResponse(BaseModel):
     answer_html: str = Field(description="`answer` rendered to sanitized HTML, safe to insert into a page.")
     evidence: list[Evidence] = Field(description="Passages given to the model as evidence, best match first.")
     runbook_gap: bool = Field(description="`true` when no indexed runbook matched the question.")
+    truncated: bool = Field(
+        False, description="`true` when the answer stopped at `CHAT_MAX_OUTPUT_TOKENS`; `answer` then ends with a note saying so."
+    )
     duration_seconds: float = Field(description="Time taken to retrieve evidence and generate the answer.", examples=[14.2])
 
 

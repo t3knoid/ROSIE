@@ -13,6 +13,7 @@
 - URLs in answers, including URLs in inline code, are clickable.
 - Pressing Enter in the prompt sends the question; Shift+Enter adds a new line.
 - A note under the prompt explains that each question is answered on its own, without earlier questions or answers.
+- The chat page has a favicon: a retro robot head in the page's colors, inlined as SVG.
 - A [configuration reference](configuration.md), plus [source sync](operations/source-sync.md) and [troubleshooting](operations/troubleshooting.md) guides.
 
 ### Changed
@@ -37,6 +38,8 @@
 - When a runbook matches the question, its passage is included in the evidence and the model is told its URL, so answers name the runbook and it appears under **Evidence consulted**. Previously, the model was told only that a runbook matched, not which one.
 - The runbook index page is indexed as a document, led by a passage saying it is the list of runbooks, with its runbook count and categories. Previously, the page was indexed only by the documentation crawl, and none of its passages said what the page was, so ROSIE answered that no list of runbooks existed.
 - The runbook index's summary passage names every runbook, grouped by category. Previously, it named only the categories, and a question about all runbooks retrieved too few passages to see the runbook titles, so ROSIE listed only the one runbook that best matched.
+- Answers cut off at `CHAT_MAX_OUTPUT_TOKENS` end with a note saying so, and `/api/chat` returns `truncated: true`. The default limit is raised from 512 to 1536 tokens, enough to list every runbook.
+- The system prompt tells the model not to guess what items cover when the evidence only names them. Previously, it padded each runbook in a list with speculation such as "likely part of the Runbook Ansible Template".
 - Table cells are separated when pages are indexed, so a row reads "Deploy Plex: Step-by-step instructions…" instead of running the cells together.
 - Passages no longer start in the middle of a word. Previously, the overlap between passages could cut names such as `deploy_truenas_vms.yml` to `enas_vms.yml`, and answers repeated the fragment.
 

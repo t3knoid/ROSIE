@@ -151,3 +151,38 @@ def test_runbook_draft_groups_evidence_without_changing_canonical_output(monkeyp
 def test_prompt_says_evidence_is_excerpts() -> None:
     prompt = load_system_prompt()
     assert "never claim a document lacks something because an excerpt does not show it" in prompt
+
+
+def test_prompt_says_not_to_guess_about_items_evidence_only_names() -> None:
+    assert "do not guess what each covers or belongs to" in load_system_prompt()
+
+
+def test_investigation_notes_an_answer_cut_off_at_the_output_limit(monkeypatch) -> None:
+    class CutOffResponse:
+        content = "Runbooks: Deploy Plex; Deploy"
+        response_metadata = {"finish_reason": "length"}
+
+    class CutOffLLM(FakeLLM):
+        def invoke(self, messages):
+            return CutOffResponse()
+
+    monkeypatch.setattr(workflow.settings, "chat_max_output_tokens", 99)
+    result = build_investigation_graph(FakeKnowledgeBase(), CutOffLLM()).invoke({"question": "List runbooks"})
+
+    assert result["truncated"] is True
+    assert result["answer"].startswith("Runbooks: Deploy Plex; Deploy\n\n*This answer was cut off at the output limit of 99 tokens.")
+    assert "`CHAT_MAX_OUTPUT_TOKENS`" in result["answer"]
+
+
+def test_investigation_does_not_flag_a_complete_answer() -> None:
+    class CompleteResponse:
+        content = "Check the service logs."
+        response_metadata = {"finish_reason": "stop"}
+
+    class CompleteLLM(FakeLLM):
+        def invoke(self, messages):
+            return CompleteResponse()
+
+    result = build_investigation_graph(FakeKnowledgeBase(), CompleteLLM()).invoke({"question": "Logs?"})
+    assert result["truncated"] is False
+    assert result["answer"] == "Check the service logs."

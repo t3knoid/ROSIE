@@ -39,14 +39,16 @@ class FakeKnowledgeBase:
 
 
 class FakeGraph:
-    def __init__(self, answer: str = "Check the service logs. Source: operations.md") -> None:
+    def __init__(self, answer: str = "Check the service logs. Source: operations.md", truncated: bool = False) -> None:
         self.answer = answer
+        self.truncated = truncated
 
     def invoke(self, state: dict) -> dict:
         return {
             "answer": self.answer,
             "evidence": [{"text": "Check the service logs.", "source": "operations.md", "kind": "document", "score": 0.9}],
             "runbook_gap": True,
+            "truncated": self.truncated,
         }
 
 
@@ -391,3 +393,18 @@ def test_source_sync_stores_runbook_index_as_document_led_by_a_summary(monkeypat
     assert "grouped by category. Recovery tasks: Recovery." in content[0]
     assert content[1] == "Runbooks › Recovery tasks: Recovery: Restore service."
     assert stored[runbook.url][1] == "runbook"
+
+
+def test_chat_reports_a_cut_off_answer(monkeypatch) -> None:
+    monkeypatch.setattr(main, "get_investigation_graph", lambda: FakeGraph("Partial answer", truncated=True))
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+
+    response = TestClient(main.app).post("/api/chat", json={"question": "List runbooks"})
+
+    assert response.status_code == 200
+    assert response.json()["truncated"] is True
+
+
+def test_home_page_has_an_inline_svg_favicon() -> None:
+    page = TestClient(main.app).get("/").text
+    assert '<link rel="icon" type="image/svg+xml" href=\'data:image/svg+xml,<svg' in page
