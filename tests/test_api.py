@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from rosie import audit, main
-from rosie.web_sources import CrawlResult, WebPage
+from rosie.web_sources import CrawlResult, IndexLink, WebPage
 
 
 @pytest.fixture(autouse=True)
@@ -372,7 +372,8 @@ def test_source_sync_stores_runbook_index_as_document_led_by_a_summary(monkeypat
 
     def fake_crawl(url: str, **kwargs) -> CrawlResult:
         if kwargs["runbook_index"]:
-            return CrawlResult(pages=[runbook], errors=[], index_page=index, index_link_count=1)
+            return CrawlResult(pages=[runbook], errors=[], index_page=index,
+                               index_links=(IndexLink(url=runbook.url, title="", heading=("Runbooks", "Recovery tasks")),))
         return CrawlResult(pages=[index], errors=[])
 
     monkeypatch.setattr(main, "get_knowledge_base", lambda: knowledge)
@@ -386,6 +387,7 @@ def test_source_sync_stores_runbook_index_as_document_led_by_a_summary(monkeypat
     content, kind = stored[index.url]
     assert kind == "document"
     assert content[0].startswith(f"Runbooks: This page, {index.url}, is the runbook index. It lists all 1 runbooks")
-    assert "grouped by category: Recovery tasks" in content[0]
+    # Without link text, the runbook is named by its page title.
+    assert "grouped by category. Recovery tasks: Recovery." in content[0]
     assert content[1] == "Runbooks › Recovery tasks: Recovery: Restore service."
     assert stored[runbook.url][1] == "runbook"

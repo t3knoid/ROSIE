@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from rosie import audit
 from rosie.config import settings
-from rosie.documents import SUPPORTED_SUFFIXES, document_passages, passages, runbook_index_passage
+from rosie.documents import SUPPORTED_SUFFIXES, document_passages, passages, runbook_index_passages
 from rosie.knowledge import KnowledgeBase
 from rosie.models import (
     ChatRequest,
@@ -247,7 +247,7 @@ def _ingest_configured_sources() -> dict[str, object]:
     knowledge = get_knowledge_base()
     pages: dict[str, tuple[WebPage, str]] = {}
     index: WebPage | None = None
-    index_summary = ""
+    index_summary: list[str] = []
 
     for source_url, kind in sources:
         try:
@@ -269,13 +269,18 @@ def _ingest_configured_sources() -> dict[str, object]:
             # led by a passage saying what the page is.
             index = result.index_page
             pages[index.url] = (index, "document")
-            index_summary = runbook_index_passage(index.title, index.url, list(index.sections), result.index_link_count)
+            titles = {page.url: page.title for page in result.pages}
+            index_summary = runbook_index_passages(
+                index.title,
+                index.url,
+                [(link.heading, link.title or titles.get(link.url) or link.url) for link in result.index_links],
+            )
 
     for page, kind in pages.values():
         sections = list(page.sections) or [((), page.text)]
         page_passages = passages(page.title, sections)
         if index and page is index:
-            page_passages.insert(0, index_summary)
+            page_passages = index_summary + page_passages
         chunk_count += knowledge.ingest(page_passages, page.url, kind, replace_kind=True)
         page_count += 1
         pages_by_kind[kind] += 1

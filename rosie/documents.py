@@ -127,6 +127,11 @@ class HtmlSectionParser(HTMLParser):
         return _normalize(self._title_parts)
 
     @property
+    def heading(self) -> tuple[str, ...]:
+        """The heading path of the section being read."""
+        return self._sections[-1][0]
+
+    @property
     def sections(self) -> list[Section]:
         result = []
         for path, parts in self._sections:
@@ -216,22 +221,48 @@ def passages(title: str, sections: list[Section], size: int = 1200, overlap: int
     return result
 
 
-def runbook_index_passage(title: str, url: str, sections: list[Section], runbook_count: int) -> str:
-    """Describe a runbook index page as a whole, so questions about the list itself find it.
+def _category(title: str, heading: tuple[str, ...]) -> str:
+    """The category a runbook index section names: its own heading, or below the page-level heading, the one under it."""
+    if not heading or section_label(title, heading) == section_label(title, ()):
+        return ""
+    return heading[0 if len(heading) == 1 else 1]
 
-    The index's own passages each hold one category of runbook links; none of them says that
-    the page is the list of runbooks.
+
+def runbook_index_passages(
+    title: str, url: str, runbooks: list[tuple[tuple[str, ...], str]], limit: int = 3000
+) -> list[str]:
+    """Describe a runbook index page as a whole, naming every runbook it lists, grouped by category.
+
+    `runbooks` holds each runbook's heading path on the index and its title. The index's own
+    passages each hold one category, and a question retrieves only a few passages, so without
+    this a question about all runbooks would see one or two categories at most.
+
+    The list is split into several passages only past `limit` characters, at category
+    boundaries; a single category is never split.
     """
-    categories = list(dict.fromkeys(
-        heading[0 if len(heading) == 1 else 1]
-        for heading, _ in sections
-        if heading and section_label(title, heading) != section_label(title, ())
-    ))
     label = section_label(title, ()) or "Runbook index"
-    text = f"{label}: This page, {url}, is the runbook index. It lists all {runbook_count} runbooks"
-    if categories:
-        text += f", grouped by category: {'; '.join(categories)}"
-    return text + ". Open it to see every runbook with a short description."
+    lead = f"{label}: This page, {url}, is the runbook index."
+    if not runbooks:
+        return [f"{lead} It lists no runbooks."]
+    groups: dict[str, list[str]] = {}
+    for heading, name in runbooks:
+        groups.setdefault(_category(title, heading), []).append(name)
+    lead += f" It lists all {len(runbooks)} runbooks"
+    if any(groups):
+        lead += ", grouped by category"
+    entries = [f"{category}: {'; '.join(names)}." if category else f"{'; '.join(names)}." for category, names in groups.items()]
+    parts: list[str] = []
+    for entry in entries:
+        if parts and len(lead) + len(parts[-1]) + len(entry) + 1 <= limit:
+            parts[-1] += f" {entry}"
+        else:
+            parts.append(entry)
+    result = [
+        f"{lead}{f' (part {number} of {len(parts)})' if len(parts) > 1 else ''}. {part}"
+        for number, part in enumerate(parts, start=1)
+    ]
+    result[-1] += " Open it to see every runbook with a short description."
+    return result
 
 
 def document_passages(name: str, data: bytes) -> list[str]:

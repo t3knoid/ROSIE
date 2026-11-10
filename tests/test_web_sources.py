@@ -1,6 +1,6 @@
 import httpx
 
-from rosie.web_sources import crawl_html_source
+from rosie.web_sources import IndexLink, crawl_html_source
 
 
 def test_crawl_follows_only_same_origin_html_links_within_limit() -> None:
@@ -60,7 +60,8 @@ def test_runbook_index_excludes_navigation_index_and_recursive_links() -> None:
         "/runbooks.html": """
             <header><a href="/overview.html">Overview</a></header>
             <nav><a href="/">Home</a><a href="/runbooks.html">Runbooks</a></nav>
-            <main><a href="/recovery.html">Recovery</a>
+            <main><h1>Runbooks</h1><h2>Recovery tasks</h2>
+            <table><tr><td><strong><a href="/recovery.html">Restore <em>service</em></a></strong></td><td>Recover.</td></tr></table>
             <a href="/recovery.html#checks">Checks</a>
             <a href="https://other.test/runbook.html">External</a></main>
             <footer><a href="/about.html">About</a></footer>
@@ -81,7 +82,9 @@ def test_runbook_index_excludes_navigation_index_and_recursive_links() -> None:
     assert requested == ["/runbooks.html", "/recovery.html"]
     assert [page.url for page in result.pages] == ["https://homelab.test/recovery.html"]
     assert result.index_page is not None and result.index_page.url == "https://homelab.test/runbooks.html"
-    assert result.index_link_count == 1
+    assert result.index_links == (
+        IndexLink(url="https://homelab.test/recovery.html", title="Restore service", heading=("Runbooks", "Recovery tasks")),
+    )
     assert not result.errors
 
 

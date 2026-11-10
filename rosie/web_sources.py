@@ -4,7 +4,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
-from rosie.documents import HtmlSectionParser, Section
+from rosie.documents import HtmlSectionParser, Section, _normalize
 
 
 @dataclass(frozen=True)
@@ -16,22 +16,39 @@ class WebPage:
 
 
 @dataclass(frozen=True)
+class IndexLink:
+    """A page linked from a runbook index's main content."""
+
+    url: str
+    title: str
+    """The link text; empty if the link has none."""
+    heading: tuple[str, ...]
+    """The heading path of the index section the link appears in."""
+
+
+@dataclass(frozen=True)
 class CrawlResult:
     pages: list[WebPage]
     errors: list[str]
     index_page: WebPage | None = None
     """For a runbook crawl, the index page itself. It is not a runbook, so it is kept apart."""
-    index_link_count: int = 0
-    """For a runbook crawl, how many distinct pages the index links to."""
+    index_links: tuple[IndexLink, ...] = ()
+    """For a runbook crawl, each distinct page the index links to, in page order."""
 
 
 class _PageParser(HtmlSectionParser):
-    """Section parser that also collects links, noting which are outside site navigation."""
+    """Section parser that also collects links, noting which are outside site navigation.
+
+    Content links are also recorded with their text and the heading they appear under.
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self.links: list[str] = []
         self.content_links: list[str] = []
+        self.content_anchors: list[tuple[tuple[str, ...], str, str]] = []
+        """(heading path, href, link text) for each content link."""
+        self._anchor: tuple[str, list[str]] | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         super().handle_starttag(tag, attrs)
@@ -40,6 +57,19 @@ class _PageParser(HtmlSectionParser):
             self.links.append(href)
             if not self.chrome_depth:
                 self.content_links.append(href)
+                self._anchor = (href, [])
+
+    def handle_endtag(self, tag: str) -> None:
+        super().handle_endtag(tag)
+        if tag == "a" and self._anchor:
+            href, parts = self._anchor
+            self.content_anchors.append((self.heading, href, _normalize(parts)))
+            self._anchor = None
+
+    def handle_data(self, data: str) -> None:
+        super().handle_data(data)
+        if self._anchor and not self.hidden_depth and not self.chrome_depth:
+            self._anchor[1].append(data)
 
 
 def _canonical_page_url(url: str, origin: tuple[str, str, int]) -> str | None:
@@ -85,7 +115,7 @@ def crawl_html_source(
     pages: list[WebPage] = []
     errors: list[str] = []
     index_page: WebPage | None = None
-    index_links: set[str] = set()
+    index_links: dict[str, IndexLink] = {}
     headers = {"User-Agent": "ROSIE/0.1 documentation indexer"}
 
     with httpx.Client(
@@ -122,13 +152,16 @@ def crawl_html_source(
                 links = parser.content_links if runbook_index and url == seed_url else parser.links
                 if runbook_index and url != seed_url:
                     links = []
+                if runbook_index and url == seed_url:
+                    for heading, href, title in parser.content_anchors:
+                        candidate = _canonical_page_url(urljoin(url, href), origin)
+                        if candidate and candidate != seed_url and candidate not in index_links:
+                            index_links[candidate] = IndexLink(url=candidate, title=title, heading=heading)
                 for href in links:
                     candidate = _canonical_page_url(urljoin(url, href), origin)
-                    if runbook_index and url == seed_url and candidate and candidate != seed_url:
-                        index_links.add(candidate)
                     if candidate and candidate not in visited and candidate not in queue and len(visited) + len(queue) < max_pages:
                         queue.append(candidate)
             except (httpx.HTTPError, UnicodeError, ValueError) as error:
                 errors.append(f"{url}: {error}")
 
-    return CrawlResult(pages=pages, errors=errors, index_page=index_page, index_link_count=len(index_links))
+    return CrawlResult(pages=pages, errors=errors, index_page=index_page, index_links=tuple(index_links.values()))

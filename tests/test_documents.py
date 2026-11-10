@@ -132,12 +132,41 @@ def test_table_rows_keep_cells_apart() -> None:
     assert parser.text == "Runbook: Description; Deploy Plex: Install Plex.; After."
 
 
-def test_runbook_index_passage_names_the_page_and_its_categories() -> None:
-    from rosie.documents import runbook_index_passage
+def test_runbook_index_passage_names_every_runbook_by_category() -> None:
+    from rosie.documents import runbook_index_passages
 
-    sections = [((), "Intro."), (("📘 Runbooks",), "All runbooks."), (("📘 Runbooks", "🌐 DNS"), "Pi-hole."), (("📘 Runbooks", "🎬 Media"), "Plex.")]
-    text = runbook_index_passage("Runbooks", "https://homelab.test/runbooks.html", sections, 12)
-    assert text == (
-        "Runbooks: This page, https://homelab.test/runbooks.html, is the runbook index. It lists all 12 runbooks, "
-        "grouped by category: 🌐 DNS; 🎬 Media. Open it to see every runbook with a short description."
-    )
+    runbooks = [
+        (("📘 Runbooks", "🌐 DNS & Networking"), "Update Pi-hole"),
+        (("📘 Runbooks", "🌐 DNS & Networking"), "Request Certificates"),
+        (("📘 Runbooks", "🎬 Media"), "Deploy Plex"),
+    ]
+    text = runbook_index_passages("Runbooks", "https://homelab.test/runbooks.html", runbooks)
+    assert text == [
+        "Runbooks: This page, https://homelab.test/runbooks.html, is the runbook index. It lists all 3 runbooks, "
+        "grouped by category. 🌐 DNS & Networking: Update Pi-hole; Request Certificates. 🎬 Media: Deploy Plex. "
+        "Open it to see every runbook with a short description."
+    ]
+
+
+def test_long_runbook_index_list_splits_at_categories() -> None:
+    from rosie.documents import runbook_index_passages
+
+    runbooks = [(("DNS",), f"DNS runbook {n}") for n in range(5)] + [(("Media",), f"Media runbook {n}") for n in range(5)]
+    text = runbook_index_passages("Runbooks", "https://homelab.test/runbooks.html", runbooks, limit=200)
+    assert len(text) == 2
+    assert text[0].startswith("Runbooks: This page, https://homelab.test/runbooks.html, is the runbook index. "
+                              "It lists all 10 runbooks, grouped by category (part 1 of 2). DNS: DNS runbook 0;")
+    assert "Media" not in text[0]
+    assert "(part 2 of 2). Media: Media runbook 0;" in text[1]
+    assert text[1].endswith("Open it to see every runbook with a short description.")
+
+
+def test_runbook_index_without_categories_or_runbooks() -> None:
+    from rosie.documents import runbook_index_passages
+
+    url = "https://homelab.test/runbooks.html"
+    assert runbook_index_passages("Runbooks", url, [(("Runbooks",), "Recovery")]) == [
+        f"Runbooks: This page, {url}, is the runbook index. It lists all 1 runbooks. Recovery. "
+        "Open it to see every runbook with a short description."
+    ]
+    assert runbook_index_passages("Runbooks", url, []) == [f"Runbooks: This page, {url}, is the runbook index. It lists no runbooks."]
