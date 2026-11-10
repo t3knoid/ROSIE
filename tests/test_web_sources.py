@@ -1,3 +1,4 @@
+import pytest
 import httpx
 
 from rosie.web_sources import IndexLink, crawl_html_source
@@ -52,6 +53,21 @@ def test_crawl_enforces_page_limit() -> None:
 
     assert len(result.pages) == 1
     assert requested == ["https://homelab.test/"]
+    assert not result.complete
+
+
+@pytest.mark.parametrize(("status", "complete"), [(404, True), (410, True), (500, False)])
+def test_crawl_is_complete_only_when_every_failure_is_a_missing_page(status, complete) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/removed.html":
+            return httpx.Response(status)
+        return httpx.Response(200, headers={"content-type": "text/html"}, content=b"<p>Home</p><a href='/removed.html'>Old</a>")
+
+    result = crawl_html_source("https://homelab.test/", transport=httpx.MockTransport(handler))
+
+    assert [page.url for page in result.pages] == ["https://homelab.test/"]
+    assert len(result.errors) == 1
+    assert result.complete is complete
 
 
 def test_runbook_index_excludes_navigation_index_and_recursive_links() -> None:

@@ -118,6 +118,7 @@ def test_ingest_accepts_passages_and_delete_sources_removes_aliases() -> None:
         knowledge.delete_sources(["https://example.test/index.html"])  # no collection yet
         assert knowledge.ingest(["Page › Storage: Ceph", "  "], "https://example.test/", "document") == 1
         knowledge.ingest("Old duplicate", "https://example.test/index.html", "document")
+        assert knowledge.sources() == {"https://example.test/", "https://example.test/index.html"}
         knowledge.delete_sources(["https://example.test/index.html", "https://example.test/index.htm"])
         points, _ = knowledge.client.scroll(knowledge.collection, with_payload=True)
         assert [(point.payload["source"], point.payload["text"]) for point in points] == [

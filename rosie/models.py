@@ -101,6 +101,11 @@ class SourceSyncResult(BaseModel):
     pages: int = Field(description="Unique pages indexed in this sync (not the total stored).", examples=[42])
     chunks: int = Field(description="Passages indexed in this sync.", examples=[310])
     pages_by_kind: PagesByKind
+    pages_removed: int = Field(
+        default=0,
+        description="Pages removed from the index because they are no longer on their site. Pages are removed only when the site was crawled completely.",
+        examples=[1],
+    )
     errors: list[str] = Field(
         description="Pages that could not be fetched or parsed, as `URL: reason`. A non-empty list means a partial failure.",
         examples=[[]],

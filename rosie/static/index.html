@@ -123,6 +123,8 @@
           if (status.result) {
             const took = formatDuration(Number(status.result.duration_seconds));
             message += ` Indexed ${status.result.pages} pages (${status.result.chunks} chunks)${took ? ` in ${took}` : ''}.`;
+            const removed = Number(status.result.pages_removed) || 0;
+            if (removed) message += ` Removed ${removed} ${removed === 1 ? 'page' : 'pages'} no longer on the site.`;
           }
           syncStatus.textContent = message;
         } else syncStatus.textContent = 'Waiting for initial source sync...';

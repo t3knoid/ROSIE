@@ -13,9 +13,14 @@
 - URLs in answers, including URLs in inline code, are clickable.
 - Pressing Enter in the prompt sends the question; Shift+Enter adds a new line.
 - A note under the prompt explains that each question is answered on its own, without earlier questions or answers.
+- Source sync removes pages that are no longer on the site, such as a renamed or deleted page that now returns 404. It removes them only when the whole site was crawled without other errors and within `WEB_SOURCE_MAX_PAGES`, so a page that merely failed to load is kept. `POST /api/ingest/sources` reports `pages_removed`, and the sync status line shows the count.
 - The sync status line shows how long the last sync took, and `POST /api/ingest/sources` and its status report `duration_seconds`.
 - The default chat model is Llama 3.1 8B Instruct (Q4_K_M), the largest Q4 model that fits on the 8 GB Tesla P4 next to the embedding model. It follows instructions more closely than Llama 3.2 3B, such as listing runbook names without padding, but answers take longer.
 - The runbook search result is given to the model as information, not an instruction, so answers that do not need it, such as a list of all runbooks, no longer end with "The best-matching indexed runbook is…".
+- The model gets the closest runbook's text in page order, up to about 4,000 characters, not just its best-matching passage. Search often matched a runbook's notes or verification section rather than its steps, so answers said the steps were missing.
+- When two runbooks match a question almost equally, both are given to the model. Previously, a setup runbook's troubleshooting table edged out the Web Service Outage runbook for "502 Bad Gateway" questions.
+- The system prompt asks the model to give a runbook's steps and commands as written, drops the Verified Facts / Hypotheses template for how-to questions, and only allows "Documentation Gap" or "Runbook Gap" when the search found nothing. In a 10-question test, Llama 3.1 8B reported a gap in 6 answers while citing the right runbook.
+- The question context no longer lists "No live infrastructure connectors" as a runtime observation; models were presenting it as a fact about the user's systems.
 - The chat page has a favicon: a retro robot head in the page's colors, inlined as SVG.
 - A [configuration reference](configuration.md), plus [source sync](operations/source-sync.md) and [troubleshooting](operations/troubleshooting.md) guides.
 

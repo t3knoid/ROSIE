@@ -34,6 +34,10 @@ class CrawlResult:
     """For a runbook crawl, the index page itself. It is not a runbook, so it is kept apart."""
     index_links: tuple[IndexLink, ...] = ()
     """For a runbook crawl, each distinct page the index links to, in page order."""
+    complete: bool = True
+    """True when every reachable page was fetched: the crawl did not stop at the page limit, and
+    every failure was a page that no longer exists (404 or 410). Only then is a page missing
+    from `pages` known to be gone from the site."""
 
 
 class _PageParser(HtmlSectionParser):
@@ -117,6 +121,7 @@ def crawl_html_source(
     index_page: WebPage | None = None
     index_links: dict[str, IndexLink] = {}
     headers = {"User-Agent": "ROSIE/0.1 documentation indexer"}
+    complete = True
 
     with httpx.Client(
         timeout=timeout_seconds,
@@ -159,9 +164,21 @@ def crawl_html_source(
                             index_links[candidate] = IndexLink(url=candidate, title=title, heading=heading)
                 for href in links:
                     candidate = _canonical_page_url(urljoin(url, href), origin)
-                    if candidate and candidate not in visited and candidate not in queue and len(visited) + len(queue) < max_pages:
-                        queue.append(candidate)
+                    if candidate and candidate not in visited and candidate not in queue:
+                        if len(visited) + len(queue) < max_pages:
+                            queue.append(candidate)
+                        else:
+                            complete = False
             except (httpx.HTTPError, UnicodeError, ValueError) as error:
                 errors.append(f"{url}: {error}")
+                gone = isinstance(error, httpx.HTTPStatusError) and error.response.status_code in (404, 410)
+                if not gone or url == seed_url:
+                    complete = False
 
-    return CrawlResult(pages=pages, errors=errors, index_page=index_page, index_links=tuple(index_links.values()))
+    return CrawlResult(
+        pages=pages,
+        errors=errors,
+        index_page=index_page,
+        index_links=tuple(index_links.values()),
+        complete=complete and not queue,
+    )

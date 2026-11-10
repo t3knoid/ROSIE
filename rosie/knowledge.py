@@ -23,6 +23,11 @@ class LlamaCppEmbeddingClient:
         return self.embeddings.embed_query(text)
 
 
+def _point_id(kind: str, source: str, index: int) -> str:
+    """A passage's stored ID: derived from its source, kind and position, so it is stable across re-indexing."""
+    return str(uuid5(NAMESPACE_URL, f"rosie:{kind}:{source}:{index}"))
+
+
 class KnowledgeBase:
     def __init__(self) -> None:
         self.client = QdrantClient(url=settings.qdrant_url)
@@ -42,10 +47,7 @@ class KnowledgeBase:
         passages = chunks(content) if isinstance(content, str) else [passage for passage in content if passage.strip()]
         if not passages:
             return 0
-        point_ids = [
-            str(uuid5(NAMESPACE_URL, f"rosie:{kind}:{source}:{index}"))
-            for index in range(len(passages))
-        ]
+        point_ids = [_point_id(kind, source, index) for index in range(len(passages))]
         collection_exists = self.client.collection_exists(self.collection)
         source_filter = models.Filter(
             must=[
@@ -118,6 +120,24 @@ class KnowledgeBase:
             wait=True,
         )
 
+    def sources(self) -> set[str]:
+        """Every source with at least one stored passage."""
+        if not self.client.collection_exists(self.collection):
+            return set()
+        found: set[str] = set()
+        offset = None
+        while True:
+            points, offset = self.client.scroll(
+                collection_name=self.collection,
+                with_payload=["source"],
+                with_vectors=False,
+                limit=1000,
+                offset=offset,
+            )
+            found.update(str(point.payload["source"]) for point in points if point.payload and "source" in point.payload)
+            if offset is None:
+                return found
+
     def delete_sources(self, sources: list[str]) -> None:
         """Remove every passage stored under any of these sources."""
         if not sources or not self.client.collection_exists(self.collection):
@@ -129,6 +149,26 @@ class KnowledgeBase:
             ),
             wait=True,
         )
+
+    def source_passages(self, source: str, kind: str) -> list[dict[str, str]]:
+        """Every passage stored for one source and kind, in page order."""
+        if not self.client.collection_exists(self.collection):
+            return []
+        source_filter = models.Filter(
+            must=[
+                models.FieldCondition(key="source", match=models.MatchValue(value=source)),
+                models.FieldCondition(key="kind", match=models.MatchValue(value=kind)),
+            ]
+        )
+        count = self.client.count(self.collection, count_filter=source_filter, exact=True).count
+        # Re-indexing removes stale passages, so a source's passages are numbered 0 to count - 1.
+        ids = [_point_id(kind, source, index) for index in range(count)]
+        points = {str(point.id): point for point in self.client.retrieve(self.collection, ids=ids, with_payload=True)} if ids else {}
+        return [
+            {"text": str(payload.get("text", "")), "source": source, "kind": kind}
+            for point_id in ids
+            if (payload := (points[point_id].payload or {}) if point_id in points else None) is not None
+        ]
 
     def search(self, query: str, kind: str | None = None, limit: int = 5) -> list[dict[str, str | float]]:
         if not self.client.collection_exists(self.collection):

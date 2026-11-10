@@ -22,6 +22,10 @@ class FakeKnowledgeBase:
         self.ingested: list[tuple[str | list[str], str, str]] = []
         self.reclassified: list[str] = []
         self.deleted: list[str] = []
+        self.stored: set[str] = set()
+
+    def sources(self) -> set[str]:
+        return self.stored | {source for _, source, _ in self.ingested}
 
     def ingest(self, content: str | list[str], source: str, kind: str, *, replace_kind: bool = False) -> int:
         self.ingested.append((content, source, kind))
@@ -186,6 +190,30 @@ def test_ingest_configured_sources_indexes_overview_and_runbooks(monkeypatch) ->
     assert knowledge.ingested[0][0] == ["Home Lab Overview: Operational guidance."]
     root = main.settings.documentation_source_url
     assert knowledge.deleted == [root + "index.html", root + "index.htm"]
+
+
+@pytest.mark.parametrize("complete", [True, False])
+def test_source_sync_removes_pages_gone_from_a_completely_crawled_site(monkeypatch, complete) -> None:
+    knowledge = FakeKnowledgeBase()
+    site = main.settings.documentation_source_url
+    gone = site + "replace_failed_disk_and_recreate_the_osd.html"
+    knowledge.stored = {gone, "https://elsewhere.test/page.html", "uploaded-notes.md"}
+
+    def fake_crawl(url: str, **kwargs) -> CrawlResult:
+        return CrawlResult(pages=[WebPage(url=url, title="Page", text="Text.")], errors=[], complete=complete)
+
+    monkeypatch.setattr(main, "get_knowledge_base", lambda: knowledge)
+    monkeypatch.setattr(main, "crawl_html_source", fake_crawl)
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+
+    result = TestClient(main.app).post("/api/ingest/sources").json()
+
+    # Only pages on the synced site go; other sites and uploaded files are untouched. After an
+    # incomplete crawl nothing is removed, since a missing page may only have failed to load.
+    assert result["pages_removed"] == (1 if complete else 0)
+    assert (gone in knowledge.deleted) == complete
+    assert "https://elsewhere.test/page.html" not in knowledge.deleted
+    assert "uploaded-notes.md" not in knowledge.deleted
 
 
 def test_source_sync_counts_overlapping_pages_once_with_runbook_priority(monkeypatch) -> None:

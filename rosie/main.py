@@ -248,8 +248,11 @@ def _ingest_configured_sources() -> dict[str, object]:
     pages: dict[str, tuple[WebPage, str]] = {}
     index: WebPage | None = None
     index_summary: list[str] = []
+    # Site roots (https://host/) and whether every crawl of that site saw the whole site.
+    complete_sites: dict[str, bool] = {}
 
     for source_url, kind in sources:
+        site = _site_root(source_url)
         try:
             result = crawl_html_source(
                 source_url,
@@ -260,7 +263,9 @@ def _ingest_configured_sources() -> dict[str, object]:
             )
         except ValueError as error:
             errors.append(f"{source_url}: {error}")
+            complete_sites[site] = False
             continue
+        complete_sites[site] = complete_sites.get(site, True) and result.complete
         errors.extend(result.errors)
         for page in result.pages:
             pages[page.url] = (page, kind)
@@ -288,6 +293,16 @@ def _ingest_configured_sources() -> dict[str, object]:
     knowledge.delete_sources([
         url + alias for url in pages if urlsplit(url).path == "/" for alias in ("index.html", "index.htm")
     ])
+    # Remove pages that are no longer on the site. Only for sites crawled completely: after a
+    # timeout or a page limit, a page missing from this crawl may still exist.
+    removed: list[str] = []
+    if page_count:
+        stored = knowledge.sources()
+        removed = sorted(
+            source for source in stored
+            if source not in pages and complete_sites.get(_site_root(source) or "", False)
+        )
+        knowledge.delete_sources(removed)
 
     if not page_count:
         raise HTTPException(
@@ -296,9 +311,24 @@ def _ingest_configured_sources() -> dict[str, object]:
         )
     audit.record(
         "web_sources_ingested",
-        {"pages": page_count, "chunks": chunk_count, "pages_by_kind": pages_by_kind, "errors": errors},
+        {"pages": page_count, "chunks": chunk_count, "pages_by_kind": pages_by_kind, "errors": errors, "removed": removed},
     )
-    return {"pages": page_count, "chunks": chunk_count, "pages_by_kind": pages_by_kind, "errors": errors}
+    return {
+        "pages": page_count,
+        "chunks": chunk_count,
+        "pages_by_kind": pages_by_kind,
+        "pages_removed": len(removed),
+        "errors": errors,
+    }
+
+
+def _site_root(url: str) -> str | None:
+    """The `https://host/` root of a web source URL, or None for anything else (such as an uploaded file name)."""
+    parts = urlsplit(url)
+    if parts.scheme != "https" or not parts.hostname:
+        return None
+    port = f":{parts.port}" if parts.port and parts.port != 443 else ""
+    return f"https://{parts.hostname.lower()}{port}/"
 
 
 @app.get(
@@ -407,8 +437,9 @@ def chat(request: ChatRequest) -> ChatResponse:
     """Investigate a question using indexed documentation and runbooks.
 
     ROSIE retrieves the best-matching passages (`CHAT_EVIDENCE_LIMIT`, default 2), adds the
-    best-matching runbook passage if one matches and is not already included, and asks the
-    chat model for an answer based on that evidence. Each call is independent; earlier questions are not remembered.
+    closest runbook's text in page order (up to about 4,000 characters) and, when the next
+    runbook is nearly tied, that runbook's best passage, then asks the chat model for an answer
+    based on that evidence. Each call is independent; earlier questions are not remembered.
 
     Returns 503 until `GET /api/ingest/sources/status` reports `ready`. Answers usually take
     several seconds to a few minutes depending on the GPU.

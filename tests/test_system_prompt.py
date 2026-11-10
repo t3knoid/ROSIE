@@ -59,6 +59,9 @@ def test_investigation_groups_legacy_duplicate_sources_and_preserves_distinct_pa
     ]
 
     class DuplicateKnowledgeBase:
+        def source_passages(self, source, kind):
+            return []
+
         def search(self, query, kind=None, limit=5):
             return evidence[:1] if kind else evidence
 
@@ -81,6 +84,9 @@ def test_investigation_includes_and_names_the_matching_runbook() -> None:
     runbook = {"source": runbook_url, "kind": "runbook", "text": "Add the host to the proxy inventory.", "score": 0.7}
 
     class RunbookKnowledgeBase:
+        def source_passages(self, source, kind):
+            return []
+
         def search(self, query, kind=None, limit=5):
             return [runbook] if kind == "runbook" else [document]
 
@@ -93,7 +99,8 @@ def test_investigation_includes_and_names_the_matching_runbook() -> None:
     assert f"Source: {runbook_url} (runbook)" in context
     assert "Add the host to the proxy inventory." in context
     assert f"closest indexed runbook is {runbook_url}" in context
-    assert "If it helps answer the question, name it; otherwise ignore it." in context
+    assert "If one helps answer the question, name it and give its steps; otherwise ignore it." in context
+    assert "A runbook was found, so do not report a runbook gap." in context
 
 
 def test_investigation_reports_runbook_gap_without_adding_evidence() -> None:
@@ -108,7 +115,7 @@ def test_investigation_reports_runbook_gap_without_adding_evidence() -> None:
 
     assert result["evidence"] == [document]
     assert result["runbook_gap"] is True
-    assert "no matching indexed runbook was found." in llm.messages[1].content
+    assert "no matching indexed runbook was found. You may report a runbook gap." in llm.messages[1].content
 
 
 def test_evidence_context_keeps_same_text_from_independent_sources() -> None:
@@ -189,3 +196,95 @@ def test_investigation_does_not_flag_a_complete_answer() -> None:
     result = build_investigation_graph(FakeKnowledgeBase(), CompleteLLM()).invoke({"question": "Logs?"})
     assert result["truncated"] is False
     assert result["answer"] == "Check the service logs."
+
+
+def _runbook(source: str, score: float, text: str = "Steps.") -> dict[str, str | float]:
+    return {"source": source, "kind": "runbook", "text": text, "score": score}
+
+
+def test_nearly_tied_runbooks_are_both_given_to_the_model() -> None:
+    passages = [_runbook("setup.html", 0.738), _runbook("setup.html", 0.719, "More setup."), _runbook("outage.html", 0.723)]
+    assert workflow._closest_runbooks(passages) == [passages[0], passages[2]]
+
+
+def test_a_clearly_better_runbook_stands_alone() -> None:
+    passages = [_runbook("truenas.html", 0.872), _runbook("bootstrap.html", 0.82)]
+    assert workflow._closest_runbooks(passages) == [passages[0]]
+    assert workflow._closest_runbooks([]) == []
+
+
+def test_investigation_names_both_tied_runbooks() -> None:
+    passages = [_runbook("setup.html", 0.738, "Check the CNAME."), _runbook("outage.html", 0.723, "Check the backend first.")]
+
+    class TiedKnowledgeBase:
+        def source_passages(self, source, kind):
+            return []
+
+        def search(self, query, kind=None, limit=5):
+            return passages if kind == "runbook" else []
+
+    llm = FakeLLM()
+    result = build_investigation_graph(TiedKnowledgeBase(), llm).invoke({"question": "502 Bad Gateway"})
+    context = llm.messages[1].content
+
+    assert result["evidence"] == passages
+    assert result["runbook_gap"] is False
+    assert "the closest indexed runbooks, nearly tied, are setup.html and outage.html. The first one's text" in context
+    assert "No matching local documentation was found." not in context
+
+
+def test_context_does_not_present_missing_connectors_as_an_observation() -> None:
+    llm = FakeLLM()
+    build_investigation_graph(FakeKnowledgeBase(), llm).invoke({"question": "Is the NAS up?"})
+    context = llm.messages[1].content
+    assert "No live infrastructure connectors" not in context
+    assert "anything about their current state is unknown unless the user stated it" in context
+
+
+def test_prompt_asks_for_runbook_steps_without_a_report_template() -> None:
+    prompt = load_system_prompt()
+    assert "give them in order, with commands exactly as written, and name the page" in prompt
+    assert "without headings such as Verified Facts, Hypotheses, or Unknowns" in prompt
+    assert "Never use either label for a page or runbook you cite." in prompt
+    assert "never present a guess, or ROSIE's own configuration, as a fact about the user's systems" in prompt
+
+
+def _stored(*texts: str, source: str = "certs.html") -> list[dict[str, str]]:
+    return [{"source": source, "kind": "runbook", "text": text} for text in texts]
+
+
+def test_runbook_text_is_given_in_page_order_up_to_the_limit() -> None:
+    stored = _stored("Intro.", "1. Log in.", "2. Run generate_all_certs.yml.", "3. Verify in a browser.")
+    matched = [{**stored[3], "score": 0.716}]
+    result = workflow._runbook_text(stored, matched, limit=1000)
+    assert [item["text"] for item in result] == [item["text"] for item in stored]
+    assert all(item["score"] == 0.716 for item in result)
+
+
+def test_long_runbook_keeps_its_start_and_the_matched_passage() -> None:
+    stored = _stored("A" * 30, "B" * 30, "C" * 30, "D" * 30)
+    matched = [{**stored[3], "score": 0.8}]
+    result = workflow._runbook_text(stored, matched, limit=65)
+    assert [item["text"][0] for item in result] == ["A", "B", "D"]
+
+
+def test_investigation_gives_the_whole_runbook_in_page_order() -> None:
+    source = "https://homelab.refol.us/request_web_certificates_runbook.html"
+    stored = _stored("Intro.", "Run generate_all_certs.yml.", "Run stage_all_certs.yml.", "Verify in a browser.", source=source)
+    verify = {**stored[3], "score": 0.716}
+    document = {"source": "certbot.html", "kind": "document", "text": "Certbot overview.", "score": 0.7}
+
+    class StoredKnowledgeBase:
+        def search(self, query, kind=None, limit=5):
+            return [verify] if kind == "runbook" else [verify, document]
+
+        def source_passages(self, source_url, kind):
+            return stored if source_url == source else []
+
+    llm = FakeLLM()
+    result = build_investigation_graph(StoredKnowledgeBase(), llm).invoke({"question": "Renew an expired certificate"})
+    context = llm.messages[1].content
+
+    assert [item["text"] for item in result["evidence"]] == ["Certbot overview."] + [item["text"] for item in stored]
+    assert context.index("Run generate_all_certs.yml.") < context.index("Run stage_all_certs.yml.") < context.index("Verify in a browser.")
+    assert f"the closest indexed runbook is {source}; its text, in page order, is in the evidence above." in context
