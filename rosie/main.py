@@ -346,8 +346,9 @@ def ingest_configured_sources() -> dict[str, object]:
         raise HTTPException(status_code=409, detail="Source sync is already running")
     previous = app.state.source_sync
     app.state.source_sync = {**previous, "syncing": True, "error": None}
+    started_at = perf_counter()
     try:
-        result = _ingest_configured_sources()
+        result = {**_ingest_configured_sources(), "duration_seconds": round(perf_counter() - started_at, 1)}
         errors = result["errors"]
         app.state.source_sync = {
             "ready": previous["ready"] or not errors,

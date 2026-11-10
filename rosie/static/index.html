@@ -100,6 +100,13 @@
       if (!askButton.disabled) form.requestSubmit(askButton);
     });
 
+    const formatDuration = (seconds) => {
+      if (!Number.isFinite(seconds)) return '';
+      if (seconds < 60) return `${seconds.toFixed(1)} s`;
+      const minutes = Math.floor(seconds / 60);
+      return `${minutes} min ${Math.round(seconds - minutes * 60)} s`;
+    };
+
     const refreshSourceStatus = async () => {
       try {
         const response = await fetch('/api/ingest/sources/status', { cache: 'no-store' });
@@ -113,7 +120,10 @@
         else if (status.error) syncStatus.textContent = `Source sync failed: ${status.error}`;
         else if (status.last_success) {
           let message = `Last successful sync: ${new Date(status.last_success).toLocaleString()}.`;
-          if (status.result) message += ` Indexed ${status.result.pages} pages (${status.result.chunks} chunks).`;
+          if (status.result) {
+            const took = formatDuration(Number(status.result.duration_seconds));
+            message += ` Indexed ${status.result.pages} pages (${status.result.chunks} chunks)${took ? ` in ${took}` : ''}.`;
+          }
           syncStatus.textContent = message;
         } else syncStatus.textContent = 'Waiting for initial source sync...';
       } catch (error) {

@@ -408,3 +408,21 @@ def test_chat_reports_a_cut_off_answer(monkeypatch) -> None:
 def test_home_page_has_an_inline_svg_favicon() -> None:
     page = TestClient(main.app).get("/").text
     assert '<link rel="icon" type="image/svg+xml" href=\'data:image/svg+xml,<svg' in page
+
+
+def test_source_sync_reports_its_duration(monkeypatch):
+    timestamps = iter((100.0, 184.34))
+    main.app.state.source_sync = main.initial_sync_status()
+    monkeypatch.setattr(main, "_ingest_configured_sources", lambda: sync_result(2, []))
+    monkeypatch.setattr(main, "perf_counter", lambda: next(timestamps))
+    monkeypatch.setattr(audit, "record", lambda *args, **kwargs: None)
+    client = TestClient(main.app)
+
+    assert client.post("/api/ingest/sources").json()["duration_seconds"] == 84.3
+    assert client.get("/api/ingest/sources/status").json()["result"]["duration_seconds"] == 84.3
+
+
+def test_home_page_shows_sync_duration() -> None:
+    page = TestClient(main.app).get("/").text
+    assert "status.result.duration_seconds" in page
+    assert "const formatDuration" in page

@@ -105,6 +105,7 @@ class SourceSyncResult(BaseModel):
         description="Pages that could not be fetched or parsed, as `URL: reason`. A non-empty list means a partial failure.",
         examples=[[]],
     )
+    duration_seconds: float = Field(description="Time the sync took, from the first fetch to the last passage indexed.", examples=[84.3])
 
 
 class SourceSyncStatus(BaseModel):

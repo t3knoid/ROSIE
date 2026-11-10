@@ -154,7 +154,9 @@ def test_prompt_says_evidence_is_excerpts() -> None:
 
 
 def test_prompt_says_not_to_guess_about_items_evidence_only_names() -> None:
-    assert "do not guess what each covers or belongs to" in load_system_prompt()
+    prompt = load_system_prompt()
+    assert "answer with a plain list of the names exactly as written" in prompt
+    assert "Do not add notes about what an item might contain or belong to." in prompt
 
 
 def test_investigation_notes_an_answer_cut_off_at_the_output_limit(monkeypatch) -> None:
