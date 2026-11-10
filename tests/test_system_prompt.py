@@ -92,7 +92,8 @@ def test_investigation_includes_and_names_the_matching_runbook() -> None:
     assert result["runbook_gap"] is False
     assert f"Source: {runbook_url} (runbook)" in context
     assert "Add the host to the proxy inventory." in context
-    assert f"best-matching indexed runbook is {runbook_url}" in context
+    assert f"closest indexed runbook is {runbook_url}" in context
+    assert "If it helps answer the question, name it; otherwise ignore it." in context
 
 
 def test_investigation_reports_runbook_gap_without_adding_evidence() -> None:

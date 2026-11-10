@@ -14,6 +14,8 @@
 - Pressing Enter in the prompt sends the question; Shift+Enter adds a new line.
 - A note under the prompt explains that each question is answered on its own, without earlier questions or answers.
 - The sync status line shows how long the last sync took, and `POST /api/ingest/sources` and its status report `duration_seconds`.
+- The default chat model is Llama 3.1 8B Instruct (Q4_K_M), the largest Q4 model that fits on the 8 GB Tesla P4 next to the embedding model. It follows instructions more closely than Llama 3.2 3B, such as listing runbook names without padding, but answers take longer.
+- The runbook search result is given to the model as information, not an instruction, so answers that do not need it, such as a list of all runbooks, no longer end with "The best-matching indexed runbook is…".
 - The chat page has a favicon: a retro robot head in the page's colors, inlined as SVG.
 - A [configuration reference](configuration.md), plus [source sync](operations/source-sync.md) and [troubleshooting](operations/troubleshooting.md) guides.
 

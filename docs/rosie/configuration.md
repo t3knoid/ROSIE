@@ -46,7 +46,7 @@ These control the two llama.cpp servers. Models are loaded from local GGUF files
 | Setting | Default | Description |
 | --- | --- | --- |
 | `LLAMA_MODELS_PATH` | `./models` | Host directory containing the GGUF files, mounted read-only into both servers. |
-| `LLAMA_CHAT_MODEL_FILE` | `Llama-3.2-3B-Instruct-Q4_K_M.gguf` | Chat model file name in `LLAMA_MODELS_PATH`. |
+| `LLAMA_CHAT_MODEL_FILE` | `Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf` | Chat model file name in `LLAMA_MODELS_PATH`. |
 | `LLAMA_EMBEDDING_MODEL_FILE` | `nomic-embed-text-v1.5.Q4_K_M.gguf` | Embedding model file name. The model must support llama.cpp embedding mode. |
 | `LLAMA_CHAT_MODEL` | `local-chat` | Name the chat server exposes and ROSIE requests. Only needs to match on both sides, which Compose does for you. |
 | `LLAMA_EMBEDDING_MODEL` | `local-embedding` | Same, for the embedding server. |

@@ -44,8 +44,8 @@ def _runbook_result(runbook: dict[str, str | float] | None) -> str:
     if not runbook:
         return "no matching indexed runbook was found."
     return (
-        f"the best-matching indexed runbook is {runbook['source']}; its passage is included in the evidence above. "
-        "Name this runbook when you refer to it."
+        f"the closest indexed runbook is {runbook['source']}; its passage is in the evidence above. "
+        "If it helps answer the question, name it; otherwise ignore it."
     )
 
 

@@ -13,17 +13,17 @@ ROSIE (Root-cause Observation, SRE Incident Examiner) is a documentation-aware o
 ### 1. Prerequisites
 
 - Linux with Docker Compose v2, an NVIDIA GPU, and the NVIDIA Container Toolkit. The [GPU guide](docs/rosie/operations/gpu-acceleration.md) covers setup and checks; it uses a Tesla P4 with 8 GB of VRAM. The Compose file uses llama.cpp's CUDA 12 image, which supports Pascal cards like the P4; do not switch to the CUDA 13 image on Pascal.
-- About 2.5 GB of disk for the default models.
+- About 5 GB of disk for the default models.
 
 ### 2. Download the Models
 
-The default chat model is the Q4_K_M file from [bartowski's Llama 3.2 3B Instruct GGUF repository](https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF) (about 2.02 GB). The default embedding model is from [Nomic's nomic-embed-text-v1.5 GGUF repository](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF) (about 84 MB, Apache-2.0). Review each model card and license; the chat model is subject to Meta's Llama 3.2 license.
+The default chat model is the Q4_K_M file from [bartowski's Meta Llama 3.1 8B Instruct GGUF repository](https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF) (about 4.92 GB), the largest Q4 chat model that fits on an 8 GB Tesla P4 next to the embedding model. The default embedding model is from [Nomic's nomic-embed-text-v1.5 GGUF repository](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF) (about 84 MB, Apache-2.0). Review each model card and license; the chat model is subject to Meta's Llama 3.1 license.
 
 ```sh
 mkdir -p models
 curl --location --fail --retry 3 --continue-at - \
-	'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true' \
-	--output models/Llama-3.2-3B-Instruct-Q4_K_M.gguf
+	'https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf?download=true' \
+	--output models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
 curl --location --fail --retry 3 --continue-at - \
 	'https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf?download=true' \
 	--output models/nomic-embed-text-v1.5.Q4_K_M.gguf
