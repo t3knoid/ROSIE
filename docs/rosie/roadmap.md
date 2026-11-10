@@ -31,6 +31,10 @@ v0.1 includes no infrastructure actions and no live-system integrations.
 - Read-only infrastructure and networking integrations
 - Multi-platform documentation management
 
+## Open Items
+
+Smaller fixes and follow-ups not tied to a release are tracked in [GitHub Issues](https://github.com/t3knoid/ROSIE/issues).
+
 ## Not Yet Scheduled
 
 - Authentication, roles, approvals, and multi-user audit identity

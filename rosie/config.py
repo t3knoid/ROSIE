@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     docs_path: str = "./knowledge"
     repository_path: str = "./docs/rosie/generated-runbooks"
     audit_log_path: str = "./data/audit.jsonl"
+    turnstile_site_key: str = ""
+    turnstile_secret_key: str = ""
+    turnstile_timeout_seconds: float = Field(default=10, gt=0)
 
 
 settings = Settings()

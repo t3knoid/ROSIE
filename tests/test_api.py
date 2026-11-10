@@ -129,7 +129,7 @@ def test_home_page_exposes_source_sync_and_last_sync_status() -> None:
     assert response.text.index('id="question-form"') < response.text.index('id="sync-sources"') < response.text.index('</main>')
     assert 'aria-label="Incident question" disabled' in response.text
     assert 'Checking source sync...' in response.text
-    assert 'askButton.disabled = !sourcesReady || isInvestigating || !input.value.trim();' in response.text
+    assert 'askButton.disabled = !sourcesReady || isInvestigating || !input.value.trim() || (turnstileRequired && !turnstileToken);' in response.text
     assert "'/api/ingest/sources/status'" in response.text
     assert "'/api/ingest/sources'" in response.text
     assert "result.duration_seconds" in response.text

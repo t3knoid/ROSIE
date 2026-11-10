@@ -28,6 +28,18 @@ class ChatRequest(BaseModel):
         description="The incident, symptom, or question to investigate.",
         examples=["Nextcloud returns 502 Bad Gateway after a host reboot"],
     )
+    turnstile_token: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Cloudflare Turnstile token from the chat page. Required when `TURNSTILE_SECRET_KEY` is set; each token works once.",
+    )
+
+
+class ClientConfig(BaseModel):
+    turnstile_site_key: str | None = Field(
+        description="Cloudflare Turnstile site key for the chat page, or `null` when Turnstile is off.",
+        examples=["0x4AAAAAAAAAAAAAAAAAAAAA"],
+    )
 
 
 class ChatResponse(BaseModel):

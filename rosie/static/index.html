@@ -42,6 +42,7 @@
     #sync-status { flex: 1 1 240px; min-width: 0; margin: 0; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
     #sync-status.notice { color: var(--coral); }
     /* Hardware panel: fixed system details and live GPU status */
+    .turnstile:not(:empty) { margin-top: 12px; }
     .hw { width: 100%; max-width: 1100px; margin: 0 auto; padding: 16px 24px; border-top: 1px solid var(--line); color: var(--muted); }
     .hw summary { cursor: pointer; font: 13px/1.6 'Trebuchet MS', sans-serif; overflow-wrap: anywhere; }
     .hw p { margin: 8px 0 0; }
@@ -62,6 +63,7 @@
       <p class="intro">Ask about an incident. ROSIE will check your indexed documentation and show its sources.</p>
       <div id="thread" aria-live="polite"></div>
       <form id="question-form"><textarea id="question" placeholder="Describe the symptom or error... (Enter to send, Shift+Enter for a new line)" required maxlength="4000" aria-keyshortcuts="Enter" aria-describedby="prompt-hint" aria-label="Incident question" disabled></textarea><button id="ask" type="submit" disabled>Investigate</button></form>
+      <div id="turnstile" class="turnstile"></div>
       <p id="prompt-hint" class="prompt-hint">Each question is answered on its own; ROSIE does not see earlier questions or answers. Include the full context, for example "List every storage system in the homelab" rather than "What about storage?"</p>
       <div class="source-sync">
         <a id="sync-sources" href="#sync-status" aria-controls="sync-status">Sync sources</a>
@@ -91,10 +93,42 @@
     let serverSyncing = false;
     let isSyncing = false;
     let isInvestigating = false;
+    // Cloudflare Turnstile, on when the server reports a site key. Each token works once,
+    // so the widget is reset after every question to fetch a fresh one.
+    let turnstileRequired = false;
+    let turnstileToken = null;
+    let turnstileWidget = null;
     const updateInvestigateState = () => {
       input.disabled = !sourcesReady;
-      askButton.disabled = !sourcesReady || isInvestigating || !input.value.trim();
+      askButton.disabled = !sourcesReady || isInvestigating || !input.value.trim() || (turnstileRequired && !turnstileToken);
     };
+    const setTurnstileToken = (token) => { turnstileToken = token; updateInvestigateState(); };
+    const loadTurnstile = async () => {
+      try {
+        const response = await fetch('/api/config', { cache: 'no-store' });
+        if (!response.ok) return;
+        const siteKey = (await response.json()).turnstile_site_key;
+        if (!siteKey) return;
+        turnstileRequired = true;
+        updateInvestigateState();
+        window.onTurnstileLoad = () => {
+          turnstileWidget = window.turnstile.render('#turnstile', {
+            sitekey: siteKey,
+            callback: setTurnstileToken,
+            'expired-callback': () => setTurnstileToken(null),
+            'error-callback': () => setTurnstileToken(null),
+          });
+        };
+        const script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad';
+        script.async = true;
+        script.defer = true;
+        document.head.append(script);
+      } catch (err) {
+        // Without the widget, the server rejects questions with a clear error.
+      }
+    };
+    loadTurnstile();
     input.addEventListener('input', updateInvestigateState);
     // Enter sends the prompt; Shift+Enter inserts a new line. Ignore Enter while an
     // input method is composing text, so confirming a character does not send.
@@ -185,7 +219,12 @@
       updateInvestigateState();
       error.textContent = '';
       try {
-        const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) });
+        const turnstileTokenForRequest = turnstileToken;
+        if (turnstileRequired && window.turnstile && turnstileWidget !== null) {
+          setTurnstileToken(null);
+          window.turnstile.reset(turnstileWidget);
+        }
+        const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, turnstile_token: turnstileTokenForRequest }) });
         if (!response.ok) throw new Error((await response.json()).detail || 'Investigation failed');
         const result = await response.json();
         const answer = document.createElement('div');

@@ -155,6 +155,20 @@ These describe ROSIE's situation to the model; they do not grant or restrict any
 
 To change the prompt itself, edit `docs/rosie/system-prompt.md`. The app mounts it read-only and re-reads it for every question. `SYSTEM_PROMPT_PATH` can point to another file, but it must be a path inside the container.
 
+## Cloudflare Turnstile
+
+For a public deployment, [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) checks that a person, not a script, is asking each question. Create a widget for your hostname in the Cloudflare dashboard, then set both keys in `.env`:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `TURNSTILE_SITE_KEY` | empty | Public site key. The chat page shows the widget when this and the secret are set. |
+| `TURNSTILE_SECRET_KEY` | empty | Secret key. Keep it in `.env` only, never in git. When set, `POST /api/chat` rejects any question without a valid token (403) before doing any work. |
+| `TURNSTILE_TIMEOUT_SECONDS` | `10` | How long to wait for Cloudflare's verification. If Cloudflare can't be reached, the question is refused (503), not let through. |
+
+Each token works once and expires after 300 seconds, so the page fetches a new one after every question. With Turnstile on, API clients without a browser can't ask questions, because they can't get a token; use a deployment without Turnstile for them, such as one on the LAN. Rejected questions are recorded in the audit log as `turnstile_rejected`, with the question's length but not its text.
+
+Turnstile protects only `/api/chat`. A public deployment should still block the other write endpoints at the reverse proxy.
+
 ## Hardware Status
 
 These affect only `GET /api/health/gpu`, the GPU details in `GET /api/health/system`, and the hardware footer in the chat page, which display data written by the optional [thermal controller](operations/p4-thermal-controller.md).

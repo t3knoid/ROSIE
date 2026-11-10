@@ -9,10 +9,10 @@ from urllib.parse import quote, urlsplit
 from threading import Lock
 from time import perf_counter
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 
-from rosie import audit
+from rosie import audit, turnstile
 from rosie.config import settings
 from rosie.documents import SUPPORTED_SUFFIXES, document_passages, passages, runbook_index_passages
 from rosie.knowledge import KnowledgeBase
@@ -32,6 +32,7 @@ from rosie.models import (
     SourceSyncFailure,
     SourceSyncResult,
     SourceSyncStatus,
+    ClientConfig,
 )
 from rosie.publisher import GitRepositoryPublisher
 from rosie.rendering import markdown_to_safe_html
@@ -136,6 +137,17 @@ def get_publisher() -> GitRepositoryPublisher:
 @app.get("/", include_in_schema=False)
 async def index() -> FileResponse:
     return FileResponse(Path(__file__).parent / "static" / "index.html")
+
+
+@app.get(
+    "/api/config",
+    tags=["Health"],
+    summary="Get settings the chat page needs",
+    response_model=ClientConfig,
+)
+def client_config() -> dict[str, str | None]:
+    """Return public settings for the chat page, such as the Cloudflare Turnstile site key."""
+    return {"turnstile_site_key": settings.turnstile_site_key if turnstile.enabled() and settings.turnstile_site_key else None}
 
 
 @app.get("/health", tags=["Health"], summary="Liveness check", response_model=HealthResponse)
@@ -431,9 +443,12 @@ def search_documents(
     tags=["Investigation"],
     summary="Ask ROSIE a question",
     response_model=ChatResponse,
-    responses={503: {"model": ErrorResponse, "description": "Sources have not finished syncing, or llama.cpp or Qdrant could not be reached."}},
+    responses={
+        403: {"model": ErrorResponse, "description": "Turnstile is on and the token was missing, invalid, expired or already used."},
+        503: {"model": ErrorResponse, "description": "Sources have not finished syncing, or llama.cpp, Qdrant or Cloudflare could not be reached."},
+    },
 )
-def chat(request: ChatRequest) -> ChatResponse:
+def chat(request: ChatRequest, http_request: Request) -> ChatResponse:
     """Investigate a question using indexed documentation and runbooks.
 
     ROSIE retrieves the best-matching passages (`CHAT_EVIDENCE_LIMIT`, default 2), adds the
@@ -443,7 +458,20 @@ def chat(request: ChatRequest) -> ChatResponse:
 
     Returns 503 until `GET /api/ingest/sources/status` reports `ready`. Answers usually take
     several seconds to a few minutes depending on the GPU.
+
+    When `TURNSTILE_SECRET_KEY` is set, `turnstile_token` must hold a fresh token from the chat
+    page's Cloudflare Turnstile widget. ROSIE checks it with Cloudflare first and returns 403
+    if it fails. API clients without a browser can't get a token, so they need a deployment
+    without Turnstile, such as one reached directly on the LAN.
     """
+    if turnstile.enabled():
+        try:
+            passed = turnstile.verify(request.turnstile_token, http_request.headers.get("cf-connecting-ip"))
+        except turnstile.TurnstileUnavailable as error:
+            raise HTTPException(status_code=503, detail="Could not reach Cloudflare to verify the request. Try again.") from error
+        if not passed:
+            audit.record("turnstile_rejected", {"question_length": len(request.question)})
+            raise HTTPException(status_code=403, detail="Human verification failed or expired. Complete the check and try again.")
     if not app.state.source_sync["ready"]:
         raise HTTPException(status_code=503, detail="Sources must finish syncing before investigating")
     started_at = perf_counter()
