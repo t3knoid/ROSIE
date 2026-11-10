@@ -7,6 +7,7 @@
 - Source sync runs automatically at startup and retries until it succeeds. Chat is unavailable until then, and the sync status is shared by all browsers.
 - Optional host systemd timer for scheduled source syncs, configured with `SOURCE_SYNC_*` settings.
 - Optional Tesla P4 thermal controller host service, with GPU model, VRAM, temperature, and fan status shown in a footer on the chat page and at `GET /api/health/gpu`.
+- The hardware panel has two parts. **System** shows fixed details, read once: CPU model, core and thread counts, total memory, and the GPU model, VRAM size and maximum clock. **Live** shows p4-thermal's readings, refreshed every 10 seconds: temperature, clock, power, utilization, VRAM used, and fans. The fixed details come from the new `GET /api/health/system`; CPU and memory are read from `/proc`, so the panel appears even without p4-thermal.
 - `RUNBOOK_PUBLISH_PATH` chooses the host directory for published runbooks.
 - All app settings in `.env`, including the organization and prompt context settings, now reach the app container.
 - Swagger documentation at `/docs` with descriptions, examples, error codes, and typed responses for every endpoint.

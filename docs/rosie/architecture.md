@@ -19,7 +19,8 @@ ROSIE runs as four Docker Compose services, with two optional host services.
 
  Host (optional):
    rosie-source-sync.timer --> POST /api/ingest/sources (scheduled re-sync)
-   p4-thermal.service ------> /run/p4-thermal/status.json --> GET /api/health/gpu
+   p4-thermal.service ------> /run/p4-thermal/status.json --> GET /api/health/gpu (live)
+                                                          --> GET /api/health/system (GPU model, VRAM size)
 ```
 
 ## Components

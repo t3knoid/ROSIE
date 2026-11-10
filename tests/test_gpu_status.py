@@ -12,8 +12,33 @@ def write_status(path, **overrides) -> None:
     path.write_text(json.dumps(data))
 
 
+CPUINFO = """processor\t: 0
+model name\t: Intel(R) Xeon(R) CPU E3-1241 v3 @ 3.50GHz
+physical id\t: 0
+core id\t\t: 0
+
+processor\t: 1
+model name\t: Intel(R) Xeon(R) CPU E3-1241 v3 @ 3.50GHz
+physical id\t: 0
+core id\t\t: 1
+
+processor\t: 2
+model name\t: Intel(R) Xeon(R) CPU E3-1241 v3 @ 3.50GHz
+physical id\t: 0
+core id\t\t: 0
+"""
+
+
 @pytest.fixture
 def status_file(tmp_path, monkeypatch):
+    cpuinfo = tmp_path / "cpuinfo"
+    cpuinfo.write_text(CPUINFO)
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text("MemTotal:       32817784 kB\nMemFree:         1000000 kB\n")
+    monkeypatch.setattr(gpu_status, "CPUINFO_PATH", cpuinfo)
+    monkeypatch.setattr(gpu_status, "MEMINFO_PATH", meminfo)
+    gpu_status.host_info.cache_clear()
+    monkeypatch.setattr(gpu_status, "_gpu_info", None)
     path = tmp_path / "status.json"
     monkeypatch.setattr(gpu_status, "STATUS_PATH", path)
     monkeypatch.setattr(gpu_status, "MAX_AGE_SECONDS", 30.0)
@@ -71,3 +96,34 @@ def test_unreadable_or_malformed_status_is_unavailable(status_file, content: str
     result = gpu_status.gpu_status()
     assert result["available"] is False
     assert result["reason"]
+
+
+HOST = {
+    "cpu_model": "Intel Xeon E3-1241 v3 @ 3.50GHz",
+    "cpu_cores": 2,
+    "cpu_threads": 3,
+    "memory_total_mib": 32048,
+}
+
+
+def test_system_reports_host_cpu_and_memory_without_p4_thermal(status_file) -> None:
+    assert gpu_status.system_status() == {**HOST, "gpu": None}
+    assert "system" not in gpu_status.gpu_status()
+
+
+def test_system_keeps_fixed_gpu_details_even_when_status_goes_stale(status_file) -> None:
+    gpu = {"name": "Tesla P4", "temperature_c": 54, "memory_used_mib": 6207, "memory_total_mib": 7680, "max_sm_clock_mhz": 1531}
+    write_status(status_file, updated_at=time() - 3600, gpu=gpu)
+    expected = {**HOST, "gpu": {"name": "Tesla P4", "memory_total_mib": 7680, "max_sm_clock_mhz": 1531}}
+    assert gpu_status.system_status() == expected
+    status_file.unlink()
+    assert gpu_status.system_status() == expected
+
+
+def test_unreadable_proc_files_leave_system_fields_empty(status_file, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(gpu_status, "CPUINFO_PATH", tmp_path / "missing")
+    monkeypatch.setattr(gpu_status, "MEMINFO_PATH", tmp_path / "missing")
+    gpu_status.host_info.cache_clear()
+    assert gpu_status.system_status() == {
+        "cpu_model": None, "cpu_cores": None, "cpu_threads": None, "memory_total_mib": None, "gpu": None,
+    }

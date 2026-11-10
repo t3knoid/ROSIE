@@ -157,7 +157,7 @@ To change the prompt itself, edit `docs/rosie/system-prompt.md`. The app mounts 
 
 ## Hardware Status
 
-These affect only `GET /api/health/gpu` and the hardware footer in the chat page, which display data written by the optional [thermal controller](operations/p4-thermal-controller.md).
+These affect only `GET /api/health/gpu`, the GPU details in `GET /api/health/system`, and the hardware footer in the chat page, which display data written by the optional [thermal controller](operations/p4-thermal-controller.md).
 
 | Setting | Default | Description |
 | --- | --- | --- |
