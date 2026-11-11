@@ -23,7 +23,7 @@
 - When two runbooks match a question almost equally, both are given to the model. Previously, a setup runbook's troubleshooting table edged out the Web Service Outage runbook for "502 Bad Gateway" questions.
 - The system prompt asks the model to give a runbook's steps and commands as written, drops the Verified Facts / Hypotheses template for how-to questions, and only allows "Documentation Gap" or "Runbook Gap" when the search found nothing. In a 10-question test, Llama 3.1 8B reported a gap in 6 answers while citing the right runbook.
 - The question context no longer lists "No live infrastructure connectors" as a runtime observation; models were presenting it as a fact about the user's systems.
-- The chat page has a favicon: a retro robot head in the page's colors, inlined as SVG.
+- The chat page has a favicon, inlined as SVG: ROSIE's head as drawn in the Building ROSIE banners, with her face screen, wink, antenna, and red polka-dot bandana, on the page's green.
 - A [configuration reference](configuration.md), plus [source sync](operations/source-sync.md) and [troubleshooting](operations/troubleshooting.md) guides.
 
 ### Changed
