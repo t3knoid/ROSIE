@@ -23,14 +23,15 @@ class AnsweringGraph:
         return {"answer": "Check the logs.", "evidence": [], "runbook_gap": True}
 
 
-def fake_siteverify(monkeypatch, *, success=True, error=None):
+def fake_siteverify(monkeypatch, *, success=True, error=None, error_codes=None):
     calls = []
 
     def post(url, data, timeout):
         calls.append({"url": url, **data})
         if error:
             raise error
-        return httpx.Response(200, json={"success": success}, request=httpx.Request("POST", url))
+        body = {"success": success, "error-codes": error_codes or []}
+        return httpx.Response(200, json=body, request=httpx.Request("POST", url))
 
     monkeypatch.setattr(turnstile.httpx, "post", post)
     return calls
@@ -65,6 +66,13 @@ def test_chat_rejects_a_token_cloudflare_refuses(turnstile_on, monkeypatch) -> N
     response = TestClient(main.app).post("/api/chat", json={"question": "Is DNS up?", "turnstile_token": "used"})
     assert response.status_code == 403
     assert calls[0]["response"] == "used"
+
+
+def test_a_rejected_token_logs_cloudflares_reason(turnstile_on, monkeypatch, caplog) -> None:
+    fake_siteverify(monkeypatch, success=False, error_codes=["timeout-or-duplicate"])
+    with caplog.at_level("WARNING", logger="rosie.turnstile"):
+        assert turnstile.verify("used") is False
+    assert "timeout-or-duplicate" in caplog.text
 
 
 def test_chat_answers_after_cloudflare_accepts_the_token(turnstile_on, monkeypatch) -> None:

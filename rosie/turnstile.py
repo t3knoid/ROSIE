@@ -4,11 +4,15 @@ When `TURNSTILE_SECRET_KEY` is set, each question must carry a Turnstile token f
 page, and ROSIE checks it with Cloudflare before doing any work. Tokens are single-use and
 expire after 300 seconds. With no secret configured, verification is off.
 """
+import logging
+
 import httpx
 
 from rosie.config import settings
 
 SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+logger = logging.getLogger(__name__)
 
 
 class TurnstileUnavailable(Exception):
@@ -32,4 +36,12 @@ def verify(token: str | None, remote_ip: str | None = None) -> bool:
         result = response.json()
     except (httpx.HTTPError, ValueError) as error:
         raise TurnstileUnavailable(str(error)) from error
-    return result.get("success") is True
+    if result.get("success") is True:
+        return True
+    # Cloudflare's error codes say why, for example "timeout-or-duplicate" for a reused or
+    # expired token, or "invalid-input-response" for a token from a different widget.
+    logger.warning(
+        "Cloudflare Turnstile rejected a token: %s",
+        ", ".join(result.get("error-codes") or ["no error code given"]),
+    )
+    return False
